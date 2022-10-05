@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8'>
+<style>
+	body {margin: 0; padding: 4px 8px 24px; background-color: #ffffff; overflow-y: scroll}
+    h1 {margin: 5px 0 0 0; font-size: 18px; font-weight: normal; text-align: center}
+	header {margin: -24px 0 5px 0; line-height: 24px}
+	button {font: 12px sans-serif; cursor: pointer}
+	p {margin: 5px 0 5px 0}
+	a {color: #0366d6}
+	#hl {position: absolute; display: none; overflow: hidden; white-space: nowrap; pointer-events: none; background-color: #ffffe0; outline: 1px solid #ffc000; height: 15px}
+	#hl span {padding: 0 3px 0 3px}
+	#status {overflow: hidden; white-space: nowrap}
+	#match {overflow: hidden; white-space: nowrap; display: none; float: right; text-align: right}
+	#reset {cursor: pointer}
+	#canvas {width: 100%; height: 300px}
+
+    .selectionPart {position: absolute; display: none; pointer-events: none; box-sizing: border-box;}
+    .sel {background-color: #dada0040}
+    .act {background-color: #00da0040}
+    .dif {background-color: #00dada40}
+    .top {border-top: .1px solid #000}
+    .left {border-left: .1px solid #000}
+    .bottom {border-bottom: .1px solid #000}
+    .right {border-right: .1px solid #000}
+
+    #info-tooltip {display: none; position: absolute; top: 100px; right: 32px; width: 204px; border: 1px solid #666666; background: #ffffe0; border-radius: 8px; padding: 4px}
+    #heatmap-height-line, #heatmap-info { text-decoration: #0366d6 dashed underline; cursor: pointer; font-family: monospace}
+    #heatmap-info {cursor: help}
+    #heatmap-info:hover + #info-tooltip {display: block}
+
+    .colortip {width: 100px; box-sizing: border-box; padding: 4px; background: linear-gradient(var(--c1), var(--c2))}
+
+
+</style>
+</head>
+<body style='font: 12px Verdana, sans-serif'>
+
+
+<div style="display: flex">
+    <div style="width: 20px; margin-right: 2px; float: left; writing-mode: vertical-rl; transform: scale(-1); text-align: center; user-select: none"><pre id="heatmap-height-line"> 1 sec : 20 ms </pre></div>
+
+    <div id='heatmap-canvas-container' style="width: 100%; position: relative" autofocus>
+        <div id='heatmap-canvas-wrapper' style='overflow: hidden; width: 100%'>
+            <canvas id='heatmap-canvas' style='height: 314px'></canvas>
+        </div>
+
+        <div id='middleActive' class='selectionPart top bottom act'><span></span></div>
+        <div id='leftActive' class='selectionPart top left bottom act'><span></span></div>
+        <div id='rightActive' class='selectionPart top right bottom act'><span></span></div>
+        <div id='leftMiddleActive' class='selectionPart right'><span></span></div>
+        <div id='rightMiddleActive' class='selectionPart left'><span></span></div>
+
+        <div id='middleSelection' class='selectionPart top bottom sel'><span></span></div>
+        <div id='leftSelection' class='selectionPart top left bottom sel'><span></span></div>
+        <div id='rightSelection' class='selectionPart top right bottom sel'><span></span></div>
+        <div id='leftMiddleSelection' class='selectionPart right'><span></span></div>
+        <div id='rightMiddleSelection' class='selectionPart left'><span></span></div>
+
+        <div id='middleDiff' class='selectionPart top bottom dif'><span></span></div>
+        <div id='leftDiff' class='selectionPart top left bottom dif'><span></span></div>
+        <div id='rightDiff' class='selectionPart top right bottom dif'><span></span></div>
+        <div id='leftMiddleDiff' class='selectionPart right'><span></span></div>
+        <div id='rightMiddleDiff' class='selectionPart left'><span></span></div>
+    </div>
+
+    <div id="heatmap-info" style="width: 20px; margin-right: 2px; writing-mode: vertical-rl; text-align: center; user-select: none">
+        <pre> Info </pre>
+    </div>
+    <div id="info-tooltip">
+        <div style="float:left">
+            <div style="padding: 4px;">Frame types:</div>
+            <div class="colortip" style="--c1:#b2e1b2;--c2:#c6f5c6">Interpreted</div>
+            <div class="colortip" style="--c1:#50e150;--c2:#6eff6e">JIT-Compiled</div>
+            <div class="colortip" style="--c1:#50cccc;--c2:#6eeaea">Inlined</div>
+            <div class="colortip" style="--c1:#e15a5a;--c2:#ff8282">Native</div>
+            <div class="colortip" style="--c1:#c8c83c;--c2:#e6e646">C++</div>
+            <div class="colortip" style="--c1:#e17d00;--c2:#ff9b00">Kernel</div>
+            <div class="colortip" style="--c1:#cce880;--c2:#e0fc94">C1-Compiled</div>
+        </div>
+        <div style="float:left; margin-left: 4px">
+            <div style="padding: 4px;">Special colors:</div>
+            <div class="colortip" style="--c1:#ee00ee;--c2:#ee00ee">Matches regexp</div>
+            <div class="colortip" style="--c1:#baa551;--c2:#baa551">New frames</div>
+            <div class="colortip" style="--c1:#f0f0c0;--c2:#f0f0c0">Same frames</div>
+            <div class="colortip" style="--c1:#99aaff;--c2:#99aaff">Less frames</div>
+            <div class="colortip" style="--c1:#ffaa99;--c2:#ffaa99">More frames</div>
+        </div>
+        <div style="float:left; margin-top: 4px; width: 100%; border: 1px solid #666666; border-radius: 2px; padding: 2px; box-sizing: border-box;">
+            Shift + Click - Select range<br>
+            Ctrl + Click - Compare<br>
+            Ctrl + F - Search<br>
+        </div>
+    </div>
+</div>
+<div id="executionsHeatmap" style="display:none">BFvOAoA{AjBjMhNlfS???????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????`tNO?H`IEJ?LGWhG\GMJPhBhGyhCLHIhBNGOxHMGp`XMGY`h\IYx@hW`hX\GLMHLK[x{OXp@AhHW`JGp@]GIDHBh?ippBKIAhYTICJ@hYIRKH``hSGQcRP`pCIYYI`A`HP`ZLKH`O`P`QhQQYRIYIZQYKJQX|GOx@UGJCPBhIB`GNYBhXCIP^IAYWEI@y`HhXOhWZZA`JAQXELJWZSG`hB[IKIYHhGpxH]HJ``PZLGhRO`QSOX`SJEKILHSIhRCIKI`Q`KJMhPCO@xG\GIhIiCPWxH`LHHhHKTJLKI\IOMIB`JxhHRpXEHJ`SG`aPxCHxISJWxJNIY`QZHYhI[P`MHXhXMISIZhR\H`THKLJHxKIxJR`KKHYxDLIZYdGNHAxG]NKLIOaG``X\QRZCKINHx[KHLITIIbA]IJhIhaDIZ\HUH[SIDISJ`GaMITHNHP`STLHLJPhhFKJMH`aB[I\I`CJpTI\JKLG`]IKJMJ`CMISKH`ZlGLHOp\UOAx@xiSLHTIPrXx@KPax`I`JLMMIxHLONNJLJBZ`\THMHRp`h\H`hDMMGx`H^Ha`DKJZp`H`xJxZpX\KHa``LJ]J`SP`\IhpDKJ`hhLIpLKHh\Ih`TIp]hGKO@kHMJ@xyJ`IxyMHIpyNHDOap`OaLVHHiHjIUJNROxXpyPxSJh``hhZp`TNIVJVJpVJR`hTLKHh[KIa`Z`pLKKKNJMMHhx[JiQaSKLKKMJSMJ`p`SMIVJZ^IhZdGMIFVHUJa`TJqhSIhyQ`pSULHph\Ix`p``h]KMLJ`hh`iEKJphp\LLJ\Q`phTQ^JhhhVJ^HhxhhZVTLJLRph`KNLLKLIpph`UHph`hZhhpCLJa\KMJ`xTKMJaQ`hphh`TKMJTPph`pTh@LJbMIK[KH\ZTHyhYpiY``pa\Hpxh`TMRhBbZhTSJ`\]KIUNLJLMNH\LKLMHhppKLMHa`CSNIVKIp`\KMJhVHqSKQxRaTP`x`x\SKLNJKQ`h[R]J`a[HapY`p\QZpaKQxh]Ia`hhSRp`dGHxbMGyaOry`MLSLJi``\SMHpi``haTLLMNKLKMPx`xp\KLQxhaUMKLKMLNJxxTMMKLMYi`h`i`SNLJx``iTKMKIa[MJa`x`^LLJi]MKKKKSIa`hh\Jq^KNKIi`x`hjhpRa`hhx`SQih`]R[SKhHhrI`q`pMSP`xiPr`[KUGipphh`yIxqXM[`FKSHaVNKJ`yQqxQb[LKTKLKNR``qXqx`^LIi^MMI[XppiCTMJxpTUM[KMPx`x`hhphhpx\KKSNKNKNKJxpx^MIxha]LNLKLMNKMLMMKLJy\Jah[hlHL`BhbDVPhSZhxxZbhSLW`jPxyFLKRpa`hhqZi`h`yTKVKLLQpah`puKKMKNHpi`SKYUTLKLR`ihp`xhp`i`S\JxxTNR[SOhy`\NQppa[MMJppaLLxpTKSHaph`haNMLLJa`[UMLLTJpxxMh@hr@sHKMWpqhXj[NSJhihKSQhkSLJyMKTJhy[KVI^SKKUHia[MTHaa`]R`xi``i]JaxLSR`pxULTIpqP~KJMTIxpxVLKMMNJ]SLJi`^MLJxp`]Qp`ih`q\MNKLKUJ^R`]SJ`qZxx`MVx``xh\h?T`GxbHbhLTR]SHii]NKLLLRphhqMSMKKNOix`^KPyp[MRTSx[LR]NMKKMRppp]NLMNLJahhip\NKJyh`px`x`x`px`a[SLKSMKLTMMKLLMSMx`hp]UIhahVTKMKR`i\KSQ[Y`axULQpxxMUKJqhUSJ{HK`PiiQjZ^SKxpqJjR`jRb`]MQhbULSMMNLLLUIy]KSLSKULMJq[VMKNNKNKTMMP`xaDVNxpppVMMMKTLSNKMMMKRqh\RxpahK[LNKRahphap[Z`iphpa`xx`xhxha``aa{SVIq`xhpaL[KKSMMKTKL`@cJE`Xhr?zpK^GpqhUVHxhaVKR\TMKKKRx`h{RaUKTNLLQpxhahxpx\LTNLMMNLLNMMJpx[SLMLJahp``ahp\LSKVLKMR`ipxSVa`ahp]NMKLKLQha`aUNLNKMLMKSMKLNMMJhahKUKRqTKTKSLSLRhxpxpppphhdG`vQDMW`rKMWxyJixSSTMLQxqNMR`q`hahppaVKQxxx`q``q`hxp[UKMNLNahqYip``ih]KQpx`p`qRq`hha\LRhpph`a``xa\MNJpxVNKMKLQhi`hhhp\ViVMMLMR`y``ixTUJip`xa[MSMKTLMRhahdGS`IyhSLXhjCTR]LQaidTLKQxx]KUJaa\TNLNKLMRxxx^MLLSNKKTMLRapp^NKKVLMLRxp`xpx[qaSULKNLKKKTNNMLMR`q`xpx`ha`i`a`i`hahihpap]Rhi`xpx]KRihx`fMh`xpVLLQap\TMLNMLNMKhHcJ???????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????p@r`?rSHjSGbUGSZXq\HhxxHyTHahpJxh`SRp[LNJkTJhhp]HhaSMLJp]LLIhh\MKKLIx`hUMJh`h`pNLJ`hp\KLKMIp``hh`hh]KLJp^Ihh`h`h`h`hh``hh~LLJh``hh]MIh`hh`hh`h]KLKKLLKKMKLJp]KJ``phh`hh[NIhh`hh`\KLKLKLLKLMJ[`i@]WIzG`z?hkWIjXKTOTNPMNO[KWDLSH`xxCMLO`xxDLNI`hhhMNKIphpZpxCKSIp``h`hhh]LKJx`h[MIhhh\Kq[MLJhh]KJ`x`KTIhhh``hpZx```hhh`^KJ`x`]LJp[NKHxpLLLKLKLLKLLJhh\NG`qJhaUJheTKLLKLLKKKKMLJ`aSMJ`x[MJ`hdG@cIGiy?M[HDUOAbpGyxGM]GMVIDMUGNKSGpapGatQMMNIKVJLKR`\KRMKR\LMJCVJSMKRNNIZxp\KNJLNMIh`xhLNKI`pphSLMI^NJ`RiVaahTJhaQhh\KLNH]MJ]MLIUKQ`hphTLMKHpx`TMLLHpp`[MMKIphpLMLLJ`phZph```aYhp{SIxx`RtI?L`@E[GPcH?r`GT`@ESOBkG@ypGF`?NUH@kH@aiGNYAai@UY?iqAmL[GFKWIy`Gxb?S[HFKWBqhGpyG`ip@hbGVUGMNP@jh?piXUVGEMQIixGhyO]TxOxiW\TIFKSG[UIFNLGSVHLKUGVNIRihIapOha`SMNIENKI]NJMMKISUH{GHcGWzkSHbQWjMGrDHyLIUOaCWxLPxYaUHyCOiLPhp[HqLOaVHiYpSQaCRpLQh`]JxEPmPaMLIxh`EOiNIx]JhhKQaVHaVJ`p\JiFHaTPhp[JxSOx\Ox`]JhUOxVIiSLLJ`aCSip[OppTKMIhVIxVJ`h`p]IaUIx]I`xUIa]JdH@jhGE`OK]H?{I?bpHUZ?baH\Z@{VPDNRGyaH`yXESQLMRPaiGaa`HypOxahIipWpq`HipXhihQxxXpxhSNNHUMLI`apnHxphSNMHKUKI`xxHahhKKTJ`hx`DKTI`pphLNLH^LMI`i`JahZTUH^MI``pxJpxXpxpQdSJZiSHipYhx`[MMh?MZGE`AD[H?sHAaiGD`GEUOGkH?qi?S`@FNOPcH?xy?`zfHFNOCLYGhbG^TGLKXAbh@py@VUGLKWIb`?pj@UUGKMWBqhHhbG]THLMRBipAkURBaxA`i`CKVGSMRCMLOLLRKLLPLKSH]LPKMRCMNISLSG`pxQ`xpIpaIhxpIhiJThfHK`IFYPFXOrRD[KHDZWbNHi]HMSLHiNHi]Hhx\Ia]IxUKKLMJ`xVHx`pTLLKLLJlRh``h`h`p`hVJh`\LLLJppUJh```p``p`p`\MIh`hh`hhxTKLJh`hh``ppLMJ`xTNIhxYph``p~NLH`ahTKMLJ^LI`phh[NJh]LKJp`h`^KKLJphSNKKLKLLVX@cIGzh?T[HD^GFKSHFSOEUiOTSPCUQDKTIFMREKTHNKRSNRLLNILLTI`xhXppxQi``TNKKIxpZpp[JpxSKNKJhhpZ~LJUMMILTKHhxpQpx`LMMI`x`pFMKJSUKHpppLKMMHphhTMMJMMMI`pp`LNMI]MKIxhpRhx~LKLLJ\MJ`p`pUMJh[LLJlG@j`GE`AFUH?sHAiaGE`?CSWGkH?iq?L`@CVO@cHG^i?NYHpy@TXHhb?T[GTNPGjhAhyHNUGMLQPyhApqHNUGNLQHb`HpqPUTHMKSMpK[G]NJQxaI`a`IixB`a`HqxB`aYKVITKRXxpYhaX[TIZi`JxhZ`ppJxhRhppHi}J^`?HcHAzIHzGM[GYrGMVGMKWOhb@iaPKSPKKUINKPPyhBpxSHxaCLKPYxpKxKW\KMIhLRTLMHpMNHhphTIhxKJph\LLJZx`VLIpEMI`h`hpLMJ`VJ]LJpSLKJpSKP`}Jh`[NI`p\Ip`]I`x`KP`xLMIhpTMIh`\Jp`]KHx`SQ`h[MJ`xSKKLJh``dH@cIGyi?M]xGjhBFUHNVGLULHMVHKSRPxx`KULI]MKHxp`\MLJTNLHpxpR`phULNJ\LKJhphhUMKJsM`hhVLKJp[NI`UJh`hh`]MJ`phUJhp[MLKKKLLKJ`x```hpYpp`[MLKKJxhZxh`hVLI`x`]JpkQ`hp`UMKLIhp`]KLMHpp[LKMLJhh```hp]JeH@E`@F[GOsH?kI@U`@D]GCTW@jhGpzFpL[IDLWHbhOhjPK\ICKYXypAxiP]VHLNPPyxGpqQMVJCTPRapQhbH`i`PxyP`cTHTKSH`apHaaX`xpQapZ^NHhhaOxxpKKLQULKPUKRTMMIUKRSNLIh`iWpa`TJqWpxpuMIxhEMNHh`a`LLKh?L`@@kGOkH?S`GVYGL`?M`GGkH?z`@K`@CVO@cHGaq?hjHLaxG`jHFUH??????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????rbGqpETSIahUMUHhiRbhVMRLVIpa`^NJha\KUI^SIy`h[SLKUKLKNIq[Rxp^MNIhyMMKR\SJaiSMSIqhpVRTUKMNLIix`^p?pyIcIK\H\`YyZiphpapSTJjULLNKUJpx`pxa`pxSVLNMLJai`ha``p}UKTKKMTJppa``b]KRhahhxxh^NJaha^MIyphhhpxa``hy[MMNKLTIyhVLRhqhTULNKRhiVKSMMLJiahx\KMVJqNKSNIqh`uI@cGhzQpi\MUJpahhap\TJqa[MKLUNKKNKUNKJhyUKRxi```ix[TMKLTKMMTIx`xxxh[URha`x[TMLQpxxp\SMLVqppi`xx`hphhxxp`xxhpppp`xax`h`ih`ppxxhh[STLKR`ix]LSKNNNJa``xapVNLKTNLJmGC``LK[Hbh[VKLNQ`aiSMR`aphhxp`i`haxh^TKKKVKLSLNMMMNKNNKKNNMKKKSSKNKTMJaxhpx\TKKULMLKTNKMMNMKMKUMIpxpah`[[Jhqh[VHyp\MTIj{Yxah`ihSUNMKSJyTMLSNMIip`paph^LSLLTJxxhxhlGF]I[[IrQ^[Iy`TSQhbYj[LNSIiphxhhxpphpa`hpa`xa^NMKKUMKLRpah\ULLNKTMLNKNLNNMJaxphaVKTKNKSLLNKSLNMLLMMKSKQa]TKNNKKNLTKMKSLSMLLSJq`hpxaMSKLUNJi``ik```ha`axhpp`haxp`ah`hlGL`QayIj`K]KIb`\ULIbpDTSHjpKTLPy``axpLSSJbpUKTJqhpxxh\TMKMTIxq`hpa^KRhixTNSJiiUKTLNNKKMTIiiZixhMVLLNJxxppa``aha`xx`xha`xphxx`hxa`ppaSSQapa\LRx^LLSSKMsKSMNLNMLMJtGL`Y`jXyp``qh\VIpih]MPaah`aaKSTMLKRxx`p`i`ah]NKTLKSMLLSMKSMLLSKLTKNMLMNMKNNLKKVJahp`pxhiTQqhhxp`pxxSVMJxa[TNKNLLKLTKKSRpxppphxpp^LKUKLRxhhx`i`hhipSSRpxx`xppx]MRphid``|HC]PVSOxy]KVGqx]KVHqhh`y\KSRhxa`pih`xxh`qhhhaphhpppap``apxpa``ipp`ph[TMRpaph`q`ha`iUNLLSNJy\MLTMLKSLLVKMNKKTMMLNNKNLNKNKTNKNMLNKMTIihxhiUKTLMLRxxp\UNJxphxhxp`app`hyVNMh@{GV\cIxjEMXhbhS]Ibh`ai]NRhqhphaxhahappi^LTNLNKTNKRixhapa`ax`hy`paa\TRpax\VLKVKKSTNMMNMKTKVKMRax`pyVMKULLTNNLKTKULMULKTLLUKLSSNMSMLQhqp`aaTTNMRahxaTUKLUKp@kIVNTKMSKK[LKTNNNLKMSKTLUKLVNkMKTNMMKUKSMNMKTMKTNNNMNKLULLVKKLVJbh`xxx[TSLSNNMKRixhxaxhhihhaa[SSNMTKMRpiphppihxx`ahihhihxx`i`ihappx`iphahxpih`yhhxappx[URapi`xpp|GU`?biKVP[`QqqUKY`bhhai`[TTNLSLLTKTLTJqppahxpahe`a`pbTMVJaxpxa`hihpahppax^MRxpxhxi[TRihpppahaxhxhaxhap`aa`xaphpaphihxxhppihxx[VKLVLKMVJqx]TLKSLSKVNMKQai]TMp@pjBkI]VJhjLK]IayNNRhihS^Hii``yh`xxpaphappxppxpap`ihxxhxpa`ipphaphxp|``ip`ipppxx`iphxxxphaxhxxhiphi`ahxhxxxpxpphpxppa`xq``xxa`hiphiphpi`xxi`hi`ahap]SNNMKTNKLUKMRuHCNXN`OqqCTSIrXyiMKY`j[KSQxip`ah`qhhpi]KVMKMRhxxx`xxhxhahhahxhahxxhxhpap`xqVNLMMKTNLPf``pxhi]MSMLKRxxpxpppxx^NMNKLTKTMMMNMLMLKVMMMMMNNMKNNLMLKSKSSMKTNMNLMKTMMMMMNh?{HCTXK`QiiMLY[\HayTMSNMMKMKZ[SQia``b`TTR`b[LSQxqSK\IxqTLTKKVKNLTLMNLLKXppx`ia`hap[SSMKUKNMNMLSMNN\cKUKKUNJxq]MKSMNMKTNLLLRapphax`ap`a`xpphhihpi]NKSKSRhxhaxp`atHL`IprQzXqi\NR`bhSUQ`ypLVPxi`\TRhi`hah`qaSVLMLTJxxhih`axh`y``q``ipx]VIihpxaUNRppxhxa]NLKVLLNNLNMMMMMJb`xphx`apxxpf``i`iphppa\KZp`q^KRix`pxa\MQaxx`hyTNSLMLRxq]h?Ch@kKG\`HrxRjhDUSJb\KVKLKXhyh`hq``y`hhq``y``xapUTLLKVKNQpahx`xphahaTULNKSLKSNNNKMMNMKMRxx`x`q[ULMLTKLTLMLTKKSQaxx`hahpx`xpi^KTMK{KQiphhiaULTLKTLNKTLLTNKKVJq[UMLMNNMhGbaJcINTOhbpDUQ`qxUVJhip\VLLNMKLUQUVJaxh]TKNNMLKTKMLTMNMIia`pi``paxh`apppi\Rxah`pihpih]KUMKTLMNKSKTMMKUKMKTLLTMMLSKNMKTKSNMLMSMNLLNNLJiphaa}`^Rxhq`hpax`a`papphpi[VKp?T`IjpSLZ`aa\K[Iix`hq`pa`ppxx`xxaUKVMMLPpapxxhx\VMMMMLNLPipxh`ahxxx^MNKSLKUMNMMKKUMNMMMMKTMNLKSKTMLKVNKMNMKKSSMNMJii``q`ppxhxahpph`??????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????EMTKR`x``pph^Jpxp\]Jxh`x`ph`hpphpVMxBjKLKTMMKSMKMLKUSKTNMJqhx`x`hi[VLNNMLjvMLMMNKRa`ipMULMLRhxa`xxVMUMKLKUJhqp\LSMKSLSLMLLLLTNMNKMNLNMNKLVJpxphx[VLMNKSMNMJ`ihhiphap`ap[VNNIaySLTJy^KKSKMULLMx?pyJb\LVJxxhpph\VKUKIqp`ai`\UJixhhpphxpa`\TLMKVLNMKKLLSNMNKTJxp``apa`xpp[SRhi`]SRhiiSKSKLTNMRpxhhq``ap\MTLLRaa[LLTLMVHix]MTLNMKMLQq`hpphpxhppi``iZix`pqXxjRjTMa?aiFMXVVKMLTMNNKKSKTVKLKNUIrYayQr[NTJpbhhhih`qx\ULKULKVMJxxpapppa`hxax`iphpx`aahpax^KTLLUJyxh`pi`aappp`aiha`px`apxip^NJjh[SVLNIqa`pxphqphaUNLTRxppx`qhxahhi``ip}GC]HqjETQhyp\[MNRhqpppxxa`qpxxTT\Iixhxa`xxxxapaphipahxxxahihpi`iphyi[MSTKVNK{LRyi[SKUKVMKK]LMLTSMNMKUJiy`xpaxxphxaxp[]NNLMNMSK\Iqpxpq`xahxyh`aahhbhpaaVTKK^I}GDUSLKY\TRaahhyph\UNMSJaix]MVMNKNNSMLNKZS\MMMTKMSLNLTNNLKTKVIqi^KTKK[MLNPyi`^MQqap`xi`hyx[VLMKVNLNNLKVMJqi^KTMKVJaahxpp^TJbpp`hqhiphhpqhax[VMUJq`axpaah`xqx[VLLVKKNUpBjpxhappb]L[LNKULNUMMLTNNNJjphxaaxphi^UMLNKYhqy``xypphai`paahy^NKVLLVLKSTJcI`qxp`r\NNTLLULK[KMNVLMLUMTNKLTTMMLTTLNLNSSNMLVLLSNNLTJjxhhipapx^TRxxq`hqVSSNNKTRqhhqppx}GN]Paxipxpiihpaapappyhpay\UKSNJiappyxhixhq`xxy]K[MK[KTSRqappii[UVJiyhxihqa[SVMKL[MMVMNNNLUMMTNKTTKUKSUdKKVSLVMNNMUKKUQiqa`aapxipixhqxhhb`axpipihixpxyhpqhhbh`iihxuGNTXpqppahpxaxhqp`pyp\[LKTSLVNKNSLUMMNLVLLQib`UVR`yhx]\LMLSSKL]MKK[MKUMSLMVNLKVKVMNMPaia`q`iphaxihahaxxpxxhq`ixxpaxhxax`b`xyh`xihpqha]VJqa`yVUMMKVLNSNSLMULLVKRxq\UUJii`apvHC[WabphhixiaaS\MNTLNVKKTSMSVNKNVKMTLVMNKSSRqxxxix`i`bhix`qpxahiappxiappqahhxbphhbx`aip`ya`pb`pqahxqhahixxaa`qxihq[TUNLTKTNUKTLSVKTNMVNLNTKMVLNL[IjiTK]KM]Iqqh[`[NSTLKUpCN`Izi^MZhba`aq^K\KSUNNNKSSSK^LLTSKUVMLKTVLTMUMNTNKVKUVMMNLUUMLRabhihi`yaxxpipi`b`xqxpapy`aq`iixppb\VSLL]HzpVVSNKYaaaxaahxichihiahaqxxpippqpihiaxxixpaqx`qa`aqhipfHE]PpzXra`xpqhpxxihqhpipxpipxa`b`aipppqphixxapapq`ia`axxxxaxxpxipxxihhaaxa`ipy]UNNNLRbph\[SMUNLLTMMLVNNLMKSULTLULKSULQyapapahixa`qi`pbhpqpxpapxxixhxaxppb]KVTKSSNKSUMLULNULLTx@pkH^[Qxyphiq`paihxqx`y`y`axxapaxqx]L\MMVMNKVLRqpxaxhaqxhix`qaxhpyhiqp[S\LNSRxqp`ij\MSSKSSRjp`yhaxqppaxxppqhxqpxxahyxpapihihaxxipxxxxixxa`bp`ixqahaxhia^UKTLSRbhaaahxixOKhWby^SZ`rhppj`xr\MUUKK\KUUNKTVKNVKTMVMNUKMSVMMVLLUUNKSTK[TNNRaxxyhixxihaxaipaq`y`y^TVLLUULMSMUUNK\KL[Rqqhxyp`qyLS\ML]Jiiahbxf`cIayppaq`xya[SZqipxaiharVMVMMVMLxG\hGcLPxj[NUSLK[KKTYxqx[S[KNVNIz`hix`iip`yphy[TLUTMMMVMLNTNKVNKVKLVLSKSUKTLWqapa]SLVLVJaqhxaahihihihqhxxihax`qxhaaaxhaipU\KL[NMMULNRixaapxhipxaxhaia`ippxqxx`ihaapihipi`pbh}GM`pTM[KN]IajxT[MKS[MMSRpzUNTQxr^KSYprVNSQibVMTUMMULMVMRiaxapipixhjhx`yxhypppqpxippixpiapihaqhxpiipihpixaxaa`bxhxiahqxpixxpqpapaq`ay[USRiihhbxxxi\TUMMUSMNTLSVJqq\VLa?pdGTh`M``^M[MK[Rjx`axqxihiy`qpxxxq`ibppaq\UTLUVNLLTNSUNLVKSTLUVJzhpqaT[SLTVMNUMNTLMVKSSVKUTNLVNLTTML[MUMVNMLlMSMVNNNVLNSSKVTKVTKUUKTMSUKTVNKUKUZhbpxab`pqppqixxyhpuGS`pCU[LNVJiappy`paiphixhia]UKVLNSRxbhS\KTK[Pqax`ya\VLRb[VMLULNULKSSUKTLTKUMUKKUSNMVJaqhhypa`qppxpyhaxappxaaxpq`ihxpqxppaihxqx`aaxpixhipxappiq]NULKUSLNUKUNNKSRaxixpqx\STSLLpHlJK`x[K`\K\LSK]LMVKUKTSLSVKTSNLTMUKSVNMKSVMMO???????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????C^NLMNJqphpx^LSMLTKRiphi]MSKNKUKMTLKVSNNLTNKTKLVJyh``ih`xaxhq`xhph`xxa`xxhxay`pb[KTMNNLJxqxaa``ip`hi``ypp`iaKUMTK]KMy@xiNUPphabqhMLVLKSKNSZah]URhq`jy`p`xq[Raaqap^KK^LNKVMTLNKSTKSLMUULTJpyphpiT]Rphai`appbbLNSMKVJiaxixhhipxxpxqp`xx`hja\ULNXaphaipppxpqhpxhpya]LSUNMLNK[LLSNMVJ|VG`bxSZxkKHaqh]\Jya\NT[UUHbh^NUSKUNMTNLTKTSLN[SKTUNKSMS[MLVMRia[]LNMSVMULLVNMMSSLULUKTUNNLRbahqxhhia`jaSTTMK]MMSTNMTLVSNMRiipaphii`pjppqxxqiVK]JaiapqhaqpD^Ij|OE]Pjx`iyJlJ\VZbaq`b\K`h[T\NMM[VLMZyVN\KULZaayadhaaihpibxxxaii^VPzxpxpixrKU\Iyqaiipxippr\L\TK]LNUKVTQaabpaqphaaqaphjxpqihaaqpixhrhaxqphxqaixihxiiqa`iqipiaheOETYxbphrhyq``zx`pz`aiihbaaxa`qii`rihaixxapqqphby\VMTVMLVKTVMVRiq`ibhpajaxaapxqqhpibahqpqxpiaxxby`ab``yq`xaz`aaihiiippiyxaaiihypxaaaypxiipiipxiyxaaaqxxqhyaxxaqxqxpabtOES\MHilNMTUML[Qybaxhbaxbaixb`ihyyxiaahyaxxraaaiapiqqhjpi`qiaja`ijxphrq`ibx[``iqqpqpiaxxrihqbx`qqq`qypxyhqqipqbxx`yyaaiqxxxiqxypiqihiqxajhiixixjhqqpqai]]RyaiiixxbilOEh`NV`\NSRzzMTSVMV]KTK[TUT[Qyiixzpxypiqy`yy`xzpqaaiab`bixxyjhiaxqabaxxqypyqpxbixjppyyxaiixiqiiiiqapyy`rppjixiypqqxqahiiyhbixxqyqpiqaaiqaaiiaiyxypiqxqqixxyiyay]TTKqGdLLM[\LK`hyiqhqcLMUMVNT[TMUVVNTULU\UNL]Rjypqypiyhjqpyiayiyahbyapbaiajahjpqiqqpyiqipyqj\VTVSN\MVM\RqzN``qiyhbqhqiaqqq`rixypbaiiqqxyxqqxiayaqixqyxiqb`rxaiqayiiaijxqihkOhlMKM`p`bjpxjjhajpjy]S^VKSZcL[KN[Zqjxija`jr`aqjipbiqibphkLULTVVSVNM]TUK[VSSUVS[K]UVMVMUS\KT\TUSTS[VKT^UK]MU[KT\UVLVUUSTL^ZxrqabxpbyxiyqiiyxqqiqaqyaxybpajaxqbxqyaaabkO[phV`ixxkJakMLM]YyyqxcKNK`phbr`bbxqjhxcMTKShhT]]MVVSVUNN\SUVTSUUUTTSVUUUUUVMSVS]KU[VMT\TTS^MSUUS^NK[^LTS]M^UMS\NS^LTVUUUUM[SN[SUUVSUlM\LVUTVSSS[VUTUK[[K]SVUUUVSTUTUSSUaBuJLhq^T[VS\NT^LS]TNUS\TVVTUL`xxazaaijaj\`axijiaajiqpcMNUK^TUL]VLVUSVVUSTT^NTT\NS\TN^LUS\NV\MS\ST\TL^VMVTUVUUMT[SVTS]NT\NT^LS\TUS]NT\NS[TTVSS[VSUVTUS\L\M]UTVTUL\VL[TiIlMPbdH`sMSL[[VT]LN^NVSUS\VLU]MS\VL[\NUVVKTST[UL]TTT]MT^LT^MSV]KS[US\UVNUS\ST^KT[TVM[UUT\LT^UK\STU[TTV[MU^KUS]VM[UN]VMT[SS\VMVS[VUTVSVTTUS\TUVUVNUUN[SVUUTL`apbqiqjxxmONShLKxCLhx\[]LS`aabxyqijaypbbxqbqpbbpijayibxacMNTVVTN]STUUTT]ULS]SS^SSV]NSU]KT^UL^UK[]K[VVUVK[TV[SS\UUM\TVUS\LV]KU\TL][NS\SVS\TT]MVUSUTUTVVSUUVTVN]K]TT\K]VUK[^KU^NL`|OCSpCKxKL`b[\`LS`ihsLTMS\SU\UL`hxjqabbU^Yjyaabjpbrhqyiabbpbz`qzxprbpazaxjbxh{LLM`ihbrpizxabyaiyiqqbqxbbxqbiqqqyhziiqyihsLUM]VKS`axjbpijaaybiqijpyrpybxakNLTU]MU^KT\TUU\K]a@vHTpxLMpRmKLK`j`xsMLL`bhizapcKUK[\UVVUSS`VV\MUT]SVSS]VL]UVVSUL`aajxbjaaibyqibabiqqbxacMMS`hqybaijaijqqiqjpraqyabqqqqqqqqajpjbpyqbija`kKUUS\TT[TVUUSS^SU\SU]K^NUVVTVUUVSiGnKGy{LJmKHtMPrcKLT`piyyqijpqrxqyibabiqyqiibqqyyxjqpbyqqqyqjaaibqiyqbxjyxqjxybayyiyyaqjixbybaiqqjiiqjxacMNTVS[S[UU^MUS^NVUTS\\K[[SSSVN[STS`hyjiiqqiyyyiyj^^TM]UUST\VS[LaCKxJmMIcMZhtLKLha`{KULM`y^`qM`yhyyb]`yV\[VNlNRkLTS]ZqzaxcMLS[^K^SS\VUTTVVTT^NUTVUUT[UUVUVM]TUUVTVUTVUTVVVM]SVUUVVK\S^UL\VUVUSVUTU]UK[[TT\VM^TK\[UT]UM]VK^USVS[SU^K]UUTUaAvGVppE`jUKp]MhpThi^S``asKVN]SK^]MM`xxcLSK`xyariiyiayqqayj`cLZbrhyrixrq`zbxqizS`rL^^LUT]NS\TT]SSS`xariaybiqbyhyrpbqjxyypjjhyqbibiaqqyyyyiyiiqqjaijiyiyxybayyyqayqqiybx|ODpxELp`]p`Tha`xtKLMhp`kLVMS`xhrqaziiqyihcNVL^UL\VSVT]NU[Pke@yl@ao@kn@ap@xo@em@{h@tp@no@ln@po@sp@bq@mn@`o@rp@dp@zv@tw@eq@pm@`q@uv@tv@uw@jw@bx@qp@{v@ex@jx@ke@}v@t}@z}@|}@v_Aaq@r_AkbAxaAbbA{aA_`Az`A}iAe_A`aAaaAy~@x~@u_Ar{@_jAqbAyiAr`Ai_AvaAxx@r}@|`ArbAn}@eu@zaAej@du@o`AvcA~gAue@_gA`gAv{@cfA~iAes@dcAseAteA}_Ahu@et@||@zi@ym@whAtjAze@xi@vk@gl@ds@ay@ly@mz@sgAlhAmhAfh@pn@jt@hv@oy@{z@y{@m}@udA{e@yg@gh@di@mi@bk@ck@hk@mk@~k@jl@~l@cm@to@kr@yr@zr@`s@bs@gw@ax@}x@}y@hz@kz@rz@t{@|{@c_Az_AubAthA`iAdiAle@pe@se@ve@bf@`h@mh@sh@th@xh@yh@bi@ei@ui@yi@_j@jj@qj@uj@fk@nk@rk@el@rl@}l@km@lm@|m@`n@~n@ho@wo@ep@gp@|r@tt@{u@rv@vv@cw@nx@rx@_y@fy@qy@uy@xy@yy@xz@d{@g{@j{@l{@p{@z{@{{@`|@o|@r|@{|@q}@b~@h~@k~@{~@__Aa_An_A``AdaAoaAobAsbAzbAidAmdA}dAbeAtfAxfAfgA{hAgiAkiAqiAtiAne@oe@qe@re@te@ye@~e@_f@`f@af@df@ff@hf@jf@lf@nf@pf@rf@tf@uf@vf@wf@xf@yf@zf@eg@fg@gg@ig@lg@vg@zg@{g@|g@~g@bh@ch@eh@ih@jh@kh@lh@nh@oh@ph@qh@rh@uh@vh@wh@zh@|h@~h@ci@gi@ji@ki@li@oi@pi@qi@ri@si@ti@vi@wi@|i@dj@fj@hj@ij@kj@mj@nj@pj@sj@wj@xj@yj@{j@|j@}j@_k@`k@ak@ek@gk@jk@kk@lk@qk@sk@uk@xk@yk@zk@{k@|k@_l@al@bl@dl@fl@il@kl@ml@nl@ol@pl@ql@tl@xl@zl@|l@`m@am@bm@fm@hm@im@jm@nm@om@qm@sm@tm@vm@wm@xm@zm@~m@_n@an@bn@dn@en@fn@in@nn@qn@rn@sn@tn@vn@xn@zn@{n@|n@_o@bo@do@eo@go@io@ko@lo@oo@qo@so@vo@yo@zo@|o@~o@`p@bp@ip@jp@kp@lp@mp@np@pp@up@wp@xp@yp@zp@{p@|p@}p@_q@cq@dq@fq@tq@uq@vq@xq@yq@{q@|q@}q@~q@er@}r@~r@_s@as@cs@}s@~s@_t@`t@at@bt@ct@dt@ft@ht@it@kt@lt@mt@nt@ot@qt@rt@st@ut@wt@xt@yt@{t@|t@}t@~t@_u@`u@au@bu@cu@fu@yu@|u@~u@`v@bv@dv@ev@fv@jv@kv@mv@ov@pv@qv@sv@xv@yv@|v@~v@`w@aw@bw@dw@ew@iw@kw@lw@mw@sw@vw@xw@yw@zw@|w@}w@~w@`x@cx@dx@fx@hx@ix@kx@mx@px@qx@tx@ux@~x@`y@by@dy@gy@hy@iy@jy@ny@py@ry@sy@ty@zy@{y@|y@~y@`z@az@bz@dz@ez@fz@gz@iz@jz@lz@nz@oz@pz@qz@sz@uz@vz@wz@yz@zz@}z@_{@`{@a{@b{@c{@h{@i{@n{@o{@q{@s{@w{@x{@}{@~{@_|@a|@b|@c|@d|@e|@f|@h|@i|@j|@k|@m|@n|@p|@s|@u|@v|@w|@x|@y|@z|@}|@~|@_}@`}@a}@b}@c}@d}@f}@h}@i}@j}@k}@l}@o}@p}@s}@u}@v}@x}@{}@}}@a~@d~@e~@g~@i~@j~@l~@m~@o~@p~@q~@s~@u~@v~@w~@z~@}~@~~@d_Af_Ah_Aj_Al_Am_Ao_Aq_As_At_Aw_Ay_A|_A~_Aa`Ab`Ac`Ae`Af`Ag`Ah`Ai`Aj`Ak`Am`An`Ap`As`At`Av`Aw`Ax`Ay`A{`A}`A_aAbaAfaAgaAiaAjaAkaAmaAnaAqaAsaAtaAwaAyaA|aA~aA_bAabAcbAdbAfbAgbAhbAibAjbAlbAxbAybA_cAacAbcAecAgcAhcAkcAlcAmcApcAscAwcAycAzcA|cA_dAbdAhdAjdAldAodAqdAsdAtdAvdAxdAydAzdA{dA|dA~dA`eAaeAceAeeAgeAheAieAkeAmeAoeApeAreAueAveAyeAzeA|eA~eA_fAafAdfAgfAhfAifAjfAkfAmfApfAqfArfAufAzfAngAugAwgA}gA_hAahAghAihAjhAkhAnhAphAqhAshAuhAxhAzhA|hAbiAciAeiAfiAhiAliAmiAoiAsiAuiAwiAziA{iA|iAcjAfjAhjAijAkjAljAmjAnjAojApjAqjArjAsjAwjA{jA}jA_kA`kAakAckAekAfkAgkAhkAlkAme@we@xe@|e@}e@cf@ef@gf@if@kf@mf@of@qf@sf@{f@|f@}f@~f@_g@`g@ag@bg@cg@dg@hg@jg@kg@mg@ng@og@pg@qg@rg@sg@tg@ug@wg@xg@}g@_h@ah@dh@hh@}h@_i@`i@ai@fi@hi@ii@ni@{i@}i@~i@`j@aj@bj@cj@gj@lj@oj@rj@tj@vj@zj@~j@dk@ik@ok@pk@tk@wk@}k@`l@cl@hl@ll@sl@ul@vl@wl@{l@_m@dm@gm@mm@rm@um@{m@}m@cn@gn@hn@jn@on@un@wn@yn@}n@co@fo@jo@mo@ro@uo@{o@}o@_p@cp@fp@hp@op@vp@~p@gq@hq@iq@jq@kq@lq@mq@nq@oq@pq@qq@rq@sq@wq@zq@_r@`r@ar@br@cr@dr@fr@gr@hr@ir@jr@lr@mr@nr@or@pr@qr@rr@sr@tr@ur@vr@wr@xr@{r@fs@gs@hs@is@js@ks@ls@ms@ns@os@ps@qs@rs@ss@ts@us@vs@ws@xs@ys@zs@{s@|s@gt@pt@vt@zt@gu@iu@ju@ku@lu@mu@nu@ou@pu@qu@ru@su@tu@uu@vu@wu@xu@zu@}u@_v@av@cv@gv@iv@lv@nv@wv@_w@fw@hw@nw@ow@pw@qw@rw@ww@{w@_x@gx@lx@ox@sx@vx@wx@yx@zx@{x@|x@cy@ey@ky@my@vy@wy@_z@cz@tz@|z@~z@e{@f{@k{@m{@u{@g|@l|@q|@t|@e}@g}@w}@y}@~}@_~@`~@c~@f~@n~@r~@t~@|~@`_Ab_Ag_Ak_Ap_Ax_A{_Ad`Al`Aq`Au`A~`AcaAeaAhaAlaApaAraAuaA}aA`bAebAmbAnbApbAtbAvbAwbA{bA|bA}bA~bA`cAccAfcAicAjcAncAocAqcArcAtcAucAxcA{cA}cA~cA`dAadAcdAddAedAfdAgdAkdAndApdArdAwdA_eAdeAfeAjeAleAneAqeAweAxeA{eA}eA`fAbfAefAffAlfAnfAofAsfAvfAwfAyfA{fA|fA}fA~fAagAbgAcgAdgAegAggAhgAigAjgAkgAlgAmgAogApgAqgArgAtgAvgAxgAygAzgA{gA|gA`hAbhAchAdhAehAfhAhhAohArhAvhAyhA}hA~hA_iAaiAiiAjiAniApiAriAviAxiA`jAajAbjAdjAejAgjAjjAujAvjAxjAyjAzjA|jA~jAbkAdkAikAjkAkkAmkAnkAokApkAqkArkAskAtkAukAvkArr}A^^^^fAfA^^xAfA^^EEEwC^EfAE^EEEEEEEEEEEEEEE^^~C^^pHcB^aA^^aA~CaA^^yA^aAfA^cBuBaA^^^aAgI^^^aAfAnH^cBxAaA^^^aA^{IaAEaA^^^^^vIuAS?HjD^aAtBvB^?^vB?L^?^aAkDE^xA^fA?L^@jDA@^qBSA^kD^fAaA^uBLDD?A^I^^@SO???BCM^cDuA??CDaAuBdBOB_KAB@yA^^^??DB^E^BGfA^B?F@NNISJMJ???OaAAGEMBcDGF^BJF?CEZ^D?^HD??C^d@tBGLFD?FELDIZA????FfD^IMS?@?GGCLICGHFOCS?HmDATHOaA^?Dd@L^^^aA^^rArA^eBeBrA^dMqDqDeBrAeBrA^^bA_AbA_AbA_AbA_AbA_AbA_AbA_AbA_AbA_AyA_A_AEEEEEEEEbAEEEEEEEE_AbAC_A_AFJbA_AbA_AbA^^F^^@?|J@aA?L?^AMFGH^OuKfA?OHBCRxAd@B^?FIA?EcBO?FO^@N?D^mDGTGGAK^HFSGFd@EJIBABNA^HCJBGEN^OHHSFU^^FJBEHITL@FVrD^MNDKSd@LKO^??_@K@fD?C@d@?@OI[IEFG?DN@xAJE[yKSDH@HPK@?sD?@AETADUBCOBCBEPAKG?PDHbA_AbA_A_A_AbA_AbA_AbA_AbA_AbA_AbA_AbA_AbAbAbA_AbA_AbA_AbA_AbARH?FH@TJ??L@N?A?HVDG^OBTB?CHTMK@BI?J?fAd@CMMIFD?IH?M^ND?IAMKXGAH?N@@_@[d@LHCCOCaNJ@ATAGfAUM?@CL?FN?HJVK?HCqBN??_@UKPVEG?SF?APAGRBF?[A?DI?@@REBKGIAO@O?X?BK?@[CN_@JOI_@?HF`LyAEEEEEEEEEEEEEEED?GOK^?KN?@BO^L^^SOB?BCPMd@KMH_@?KU?ICXd@L@BGCM^LRCCE_@IH?YT@@U@_@FHGANGNH@DCIKGEX?BABFAA[ICFA@@FuAJE?Gd@H?UJLMF@YW?@CCLH?d@OHEIBC?Zd@F?DGKJGKA@GIUEHaA?@D?UK?d@GFM^KNNMDd@G?IFD@KBQBCMd@MMI^TFMGE_@PIZ?U?d@AGAI?FDO?FX?E@F?@PO@TBGNPVGHAHSQSDFOAPQS??PCA@A?sDC?AEV?GSXNN@C?[\d@OUMI?FA}MB@@TLO_@?AGDHHMVd@LAK?FBF@Y?FTLFH?@F@ECVGAGSFNB?AP[_@A?IGFMIJCO?@XEGU?[ZTAGNPIZ@DM??@d@FMFCIZCB??JDBd@JGKMIZ@MJNAGBd@MNDB@GIO@GFEXAG_@CJWEHG@MLC???VFN?NSX@D_@H[YWENULZTKOFNPG[F?N@Id@EELEEEEEEEEEEEEEE?OGKRA@OBFIPVSBCD@?DNSP[I??E@HXLQ_@JNJMWSXMMM?N@?OOBC[GEDK@?FAIUA?BD?@XC?[SXK?J?H?[?IANBG?^ATABBB_@[HUAAMAJKAGIF?HCOXYW???MLHEHGDHGFV^S@GFDE?FZd@LQHOANJWJ??FOWPFA?GKCFMR@?CIZHMHD_@@E?d@MGIAAGTJ@PCDCd@GFMGJ?GIFECXGFVNNUKJDHSC@DASUD@J?PADBJR@DI?CGXd@DNCBI?@OPBG@UBF?RNCD@I?GNKH@@MXF?H?YN@??OPKFRRINU?HXE?V?H?AE@CSMMPXd@CH@GDBHJI?F@UVH?G?ECKI?@Y@CE?MTSXE[ACHG@?FXE?IUBCDFXP[M?@IZJGNHHJd@L?U?GMEFYBNOAFTKFC?@DPNCMQS??CJHPLQOGEWFPHJ@GRYW_@JM@?DC?BLNC?VBC?JHSYW_@AL?O@GRE?FGIJK@OAGXZTMCA@GPC??@J?@FQGKBLMJ_@NVWEEPEEEEEEEEEEEEEE??R_@?AB?M@IlNXGGNHUFZHd@SXFGKDNGA?OBCH@FG[IF?KMNXCDL?FCM?G@YHTMKOFBECTCA@d@H?CBDAE?B?F?IXd@MA@BEIUQHD?WAOGMKA\JO_@@Ad@GFJ?@ACHA@FIZ??B_@d@F?CRMDEGK?IN?H?X?UR@MEIG@NK?@EEBPAFDFRDBUBAWGHB?CLHJ_@MBCOVFSCE@JR??ACABGAFIF?KGIBHH?Xd@N?GNG@?I@MD^??XWPCEKGBRIG??GC?UMDCXBF?KC@[?NKFKBIEEG??@XD[OHBF?DA?UDFLQNAJOGBNKWFALH?OL??GDAGY?UC?TAGAAQDMKA_@@_@O?GBWP@GROHG?C\B?J?d@@@UDDIU?DINBH@NMHXD@?H??[M?_@?UNI?U?JGFAEX@BOBC[CFJ_@FK?IJ??_@BXCO?HCH[I?HGA@XUHCIO?D@H?@CNXE?@CO[?AUHHCJFIEUCJEXHONC?C[C?OCEDKEHIU?CXBJEGF[TLCCE?@HBGU?V?BACSUC@FDMNP??DBDA@RFGFIZH@?NDFDd@EELEEEEEEEEEEEEEE?J?YOD?K?TTLA@OAUVPV_@AOUOB?FCEGMFMBG?SLQNW?UH?M@LYAOCJUGIF?CCCKEBCFFXBCXDAJ@N[IZA@@UNd@GEXJGJD?NMFBN@CUAG[SXA[BBJNFE]BCBUOBTFCOA^PEEGHACQ@EHB?_@GBDRIZF_@MAKd@K?\NCEGDH?d@L?ENNF?D@@JYMMFKN@CT@CAAH??U?PAQP[@KKCFC@DAF?E@OIFONFL?@FYBCTNBBBNHEPVA@OGHM?OKB@S??@J@?IDJMMGHX?FCA[EB]HMA?@H?MUGTNKBA@J_@BPHF?@@Q?GHMBWPMABDB?J?ADBRGU?IUCGGB?A?UXGU?O[?DFZCFFHJ??BGd@F_@B?CFIOFEBABCFXHUMM^^[UBOUAUO@U?IOKECXTLDCUNADVIN??D@??DXd@BG?OEBHFDICCBXWPUCAUBKD@BRGAOId@LEA@FG?OYIZ?BG@?BA@d@MH@HITLOG@JF?FMVIM@?@?NXd@KFOH_@IZG??FBUDAd@LOAEOAYMJLGB?@OVIOHKCABBXWPGKBA?FRI?MBNEXd@AHMA@OB?IZFM@MG?d@LKN@KYFDJRA@?A@CHIAN??BH?XGAK_@F[I?AOG?_@@XWPCKJAMJQEEEEEEEEEEEEEEE?Mz@uAWD?FBVBC?Sd@L?FMUACDGKF?CEDNBYUED@A@NZCd@ZTD@AFFN??GFADAHB@P?HC@F?RBJIVI@?@?@FH?BHFD?FOKX_@AACF?TUPAEGG?IJJH?K??DO_@?EXAGCGAKWOLUUKGNABL??_@MHKNOJKVAAOMHF_@LANOVIUMDGB?X@DJ?J@?DVE?BFML?CVUC?HO?MZBAAGd@HUHE?F??F?FGIMGAA?OC@XOHJF[IAD?_@OJCAKGF?X?@?D?BN[@?FICABH]JE?UBN?F@}A^GGTGAUHB_@@PFCDGN@QGUHBAFC?EFEWO@HC?FKLADG??@E_@VG?@UB@DBOS@?GPGCFDKWJEUEO?G?LMN?J?JE?VH_@F?SDZDDBE?@NH???Fd@ACOO@JH?OIF@FHXd@GUAABAODBIBHJ??HXAXFGFUJCK[I?OD?BGAEXd@_@F?MHIEEBBG]U?CMOKD?T@FAUUAFDPGK_@F?JOQ?N?_@U?J?FWGHCFC?@AALB?CGUVLRD_@@H?UUFAINU??BJXd@@JGOFE?KId@LEOKO^^O?ME?YJ@?ETD_@MBK?IA?C?A?X@FGGKFBF[MC?UOGFEJIDNCG?D@XOH@C?D@[IOH?_@AEA@XD@CUH@@F?[@DN_@BKI?@IEH?BDNXM\?JFCAG@MKHd@EG??_@?ILQOKCJMFFWPOGGGA_@RQDEEEEEEEEEEEEEEE?BWNB?B??ZNAOOUBJN?JHd@MABOGFGI@?O?@?N@X_@B??UND?BG[??EF??@HIKGD?@CEXLRCUKN@GJ?@CI_@C_@JKFJXYW?_@C@AKOMHKFNOLM@VCDUd@_@FCH?U?IZMN_@AB??E?MJz@F^^d@??CNGIZBED?JA?DBF??d@H@GDOJ?IZU?FHUHBd@LQAGHUBDNJWBYCBC_@O@?TE?TDA?@CUO?@P@MCJJAGNHQ?UUK?DNJWKSAAKU?D?E?PK@OGOG?RB?Cd@DKDAGA?IZA???OFO?GDFd@AE?AUNAKI?AOA_@E?GXXd@KCAFAMNIHD?Q?@EDC@DWBOF?FNBELXd@D?AHGF?JIZBH?O?GGd@?@V?G?DK?S?LF?MD@MJCHC?V?DFCJGGFESUJ@?AJ?C@PC_@JJ_@RMKL??A_@KOHJH?GV@A@FK?@@DS?EBU^AU^vB^HKPGNKG?NCUD@RJEJEBICASNB?NH@@NG?P?EO@?EOF?R@B?F?GAIZCD_@FMJBA@AHd@?MJD??Id@L?C?JEGMYAGSABBGN?DB?OPEGHKOBRI?MJCBHUEFXd@UA??KBFOIZ@NHCD?Ed@UH]F?AEBDB?@DEUTF@C@@NHP?G_@OMCQSA@MBB@_@HP?I@JKGKB?AXd@D?@MBOAIBCd@EDCN@@@MIZO?DO?E?Ad@LANCCUO?AYGU?CAU_@TMKPJGEAFN?@@HQJA@@@B?@FDWUCH?ALNOSK_@NABCODNBNP@A?U^^qOaAJB?RDBHFFFMKI?@A@OBBHXd@@GB?NHMJIEEZEEEEEEEEEEEEEEGJd@G@ED@AI?CMCGBGBEGHFH@XBKG?FGE[HA?NB?KMM@UHAK@IG?K?IHGBBD@X@B@@?HLDMUCED@VU?AU@SSX?U_@?F@H@FBDMECH[HNFNIZ?BOHC@BHGABG_@Cd@KFONHM_@KI?AKGAF@H?JGXDBCM@H@KD[BGI?JCG@MHKADCFd@AFGDSAADCHPJG?\?NFMOFKAMUFBd@?_@@MIZH@@ABBUCO?@CUFBd@UBEGACGI?E??BE?BF@MXBHCDHJCGD[BBEFFNKIZz@B^fA^^ABG?HF@FAJd@NME@IBF@_@NIMHK?D@BG_@@GX@@FCED[@G?BCG?BCC_@GANIG@B_@A@XDJK@?D@J?[?U?@_@HKHM_@KIKF?_@K@AXd@D@C?CCHDDIZBBA@BEB?Ad@?L@?M?NJBHYWBK??D_@LKGA?H[DHD?OK?@JHIAA?DNAHX@FFN?CCAG[_@??EBAUA@EIKBCU@DB?Xd@J@C?MJDOIZBUNUOOH?M?d@LUBUFA?@MMYW?H?H?KLCEOFFLD?NNKKGAEVBH??B??S@EGEDNH?DP[K@AG?@NIAGVB?N??EUCDBSDKEDCNNAHOFaAaAdBP^aA??NBA@ERIONM@BJKDDDN@XU?OG@A@G[DKB@??HKJAIJMAO?HNXCD??X?CH?JMB?C[@DUU?J?IZNMEAFGE?KCAd@AE@GHGFIGJRC_@K?@O??@DI?H@??EXDMBIBHOFF??@DAA@XE?OB[I?NEBNKDAA?EKXMHMBGFFC?[KEK?_@H?ILR?@BFUJODIOIJJFDE??AB@XCEGD@NM[d@LU?GEJGFMYEFIG@AA@NAGENAXGN?DN[@QEEEEEEEEEEEEEEEBHNW?BNFDMD???DO_@ECLMEH?ID_@HBH@AB?_@XAHMCOD?MBFHJF[OO??FNFCUCIBHCz@^^}D^U^bC^}AO~ONJBCX?JB?FD_@CH@@C[ME?MKDMAI_@KGAKM?GJ@??GX?@?ODBK[AK_@A@J?N@BDCMUIB?_@@@AGXOBF@F???J?H@[?CDDMG??IZF?@FKGGGNNAMd@NHAHEKKA?IZM??HOGB?d@VIF?CME_@@ACX\d@?JFAM?GKGIK?MSAHMC?KN@P[DNDU?JN?@IBPCON@H@?B?OQSO@?G?FD?@?P[JJU??K_@@I@HIDUMB?HDD?NFA?@XD?JHMUD@[B?@JEFOG@E?ION?CFFH?@Xd@EC@A?GEDKDIZBEU?ANNd@EBBN_@d@DNGFO?UJKID?GGGK?MH?NXKHNGFFDU[IGMU??}DeCuA^}A^cEoO^MONKJ?XAOD??DC@M[I?AD@GDKDXKN?KCWEFAE_@DLRAEADHH?DD?N?IDHUGG?D@FXd@DN??EB??IUJ?RC?CDJMFIIZA@ENGMNNGNJCOd@GN?U@DIZ_@C?EM??MGD??d@@@CCD?EIUKNHCL?OBOB?@HHD@UYNBHMGDK@?TAO@B?D?BJKP?MBKA?B@CGEQ?@OM@CAFWP@OMO_@BJBACRIG@BE?G?B?X?P@HAB@?G?QJD?]OCD@BJG_@?@?TCC?UD??APEVNO?DEBU@KSXHBAEOG?HG[?@@YCA?BB@_@OTLD@??C?GAHGVIA?OGUCJGDXd@LN?KGAMOKBYIZO?NO^rA}AePdB^^^^??CDKEGOd@CJ@M@DIONGI@B@B??G?@HF?XAN?@U?CDCNG[E?HCODGIZMKUK@?O?KOCAd@?GCH@NDUCIZ?A?OHFDF?d@FT?AU?NO@FPEBSFJDDEKJFAAQEEEEEEEEEEEEEEE?GCWBCFKKCD?BB?J?C?@LO@B[?BGHA?F?NGUKJKUJIFD?N@_@H?XHMJJ@G???@ME@[?GNCOCIVIBCFGB@?FAAUJUJAXMO_@[BF?GJKE?ECKd@OH?D?A?IA??@D?DECABFAX@GDA?@_@GGH[@E?HDK?@J??COIF@UHAAGGBXBH?_@A@FAFGCMFG[?@KBIVIDFKFGD?C@HNGFCUX?EKH[BUG@FDOBCV@CEGOz@^^tB^bCgE^^_Ba@^DSNGA_@N?H@UEE?C@PBAJNHG@G?ARDFEOMAAGGHDIH?DM@AA@JCX?F@BOB?@JMHO[?GJC@I?IAND@G?A?UB?@GH?XA_@CFMCC?F?U[BJAG?MOIZ?C??@HOJEHC?@d@UNBAHGNMM?IECC?CEFUX?@DUDR??B@BMG?@I???N??HBCOA@FGJXKB?[BGHJ?Q?O??GAGOCD@FWFHHNA?B?C@FLGFU@DGGVDCNDAFFCFKFSXCH@FNBBAUFN?[G?NM@JIFHMDMFGHLDD?BHB?GYA@ABHKK@BANC?ECTBUNB?GCNPHU@??DBGGKCQEOHCFGNHE@?W@JBUDJDHLSXKBNAMNJ^?a@`CjE^iOs@D^~@uA`@KA[BBDGOGUOI?C@S@D@NAUUANBP?JMFGHNH?@HRHNH?GUAB@IZ?DB@KE??B@d@L@GNFJK?BYBJH\UBBNUD@@BCUd@BFAK_@BHNIRCI?ADHGJF?OXd@CBC?DCN@BJ?IZ@_@H?DEEF_@Hd@LCMFGC?JFHYIZ@JD@JC@?Ad@KHASDBKKHJD?P[@?H?@@JMEIIMZMM?AEBC@K??@d@BGBUMHGEFIZN?BNCKHJFd@HRGHHDOHJJEO??I@K?FOK?UX\d@J?BB?JJEG?K?IKNHGAJJAKDXd@MFMCGD_@UCAIZ?CAEF@AAd@CAAI?K??FUB@@KHXEGM?_@CBB_@D?N[OCHOUDIAQEEEEEEEEEEEEEEE?Gz@^jEeRa@eCa@`@{@^^a@b@`@{@q@iBa@`@^mP?W@FDUHFAOAOMGJ?GCSTLB_@MM@DDF@JJNBC_@H?VU?DUS@GET@B?HACEKUUEPCDMMBAMAQDKHMDNCU@P?_@KKJ?JRON?CFHJ?BJABDEIKCDDFX@P?BB@E@EEKEMN?@QNAGGO??GAUB?ENONGW?GFCLRJHCU?UOHUHM@EIE?B??HC?@A?X?FFEG?DK[GFF?XB??U??CG?FJ?[DBHNC?FEF?GIKHNKNAKOCNDBXF?O@HO??MGFHDE[NGNCBCIMd@@KMDHCBKBEKAGEIDBAA@NKH?MAKXC_@E@ADC[KAU?IBOD@DJHDC@AX_@J?G_@MMFBKAH?[CUOAO@CI@d@EAHKH?@?AEGCADI_@M?@G_@C?OGJK^XUDMhC^^`@a@`@{@q@p@a@b@`@{@q@^a@`@{@EDDHO[IBG??@HAGOGOCEUFXMCK_@DO[?NE@CIFJ?DDBNCAHXHNUN@KUH??@@DJB[HGUM??IZNNA?BBEFUH@Md@AKAOK??CF@C?@I?@@FNUH?X?@FPN??HE@MGEUHM_@RCB@EMAMKAAI_@NKJ?@D@FDBCXFNFDJDNFGBCA[HJDJO@I??@AEBJC_@IHGGDGC?HXMAHMAF?KDAHBCDE[OGU?AGAI?HCGHHANNAMX_@?CNBM@HACKA?A?UH[H@D@ICYCECACKA?UAGE?HT@@GA?@@BB?@MPFNCN@?H_@Q?@RE??FENOCO?OKBDIJHD?@?HAXd@?@DA?OFBE@IACRGJH?ENGHMEH?AI?G@GCJG^^XB?qBJa@`@{@q@x@a@^a@C`@zPaAq@x@b@~@^^|Ad@H@@B?FFAGE?I@HMFGAH@_@B@E@XHOOCGOHC?[A?BJFAGEHCFAIHFCJ@?HFK?KAXAKD?EFED@[VI?_@OMHHK?CJ?Xd@_@FABOHECFCNE?IHADMAEFFNXIZJJMDHJUNGJHd@LHJUEDADKHJYDULKE?ABCK?DCYWND?NE@JFDFGAGLBUJAF?CVNQEEEEEEEEEEEEEEE?OWE?OKJFH@@GF?BKNHUMLABMJVJCBDEEHJC@BDFA_@S_@@HDGM?@_@?C@_@BCP?FDGORFNNF?OB@@@GBJDKI@?DKBXJ?NCMB?MQU?JNF?HC?WO@@?E?CN?H?J@LONUCJ@VUIJ?MKCDOAC?GGNFXC?DBU@JUHAD@?@[HKO?KILQ?Cz@cCF?Da@b@`@^fAa@e@F^r@x@a@b@fA^e@m@a@iBc@b@`@UBEUBNGBWM?K?GHAUCUA@L?B?GDANMVIKFEOAFMD??UCEEX??JNCB[FAAAFHEO?H]JMMH?JBTHHUE@@A@@NH?APBGF??@C?QAGMONNCFMBUJWMJ@M?_@JGDGUJG?OLNFH_@MV_@NH]DC?NNHA?EUJ@TCAKUN?GBNAMOME@PAGBHAHQSNAJ?MBOCUH@@HPO_@HCFO?BDNRIJ?F?C@H?@X?KC_@WBHO??_@OF?@JCLUA?EANOB@DVDGD?EBKA@@EBSDHE_@?FABHF?@P@?GC?N@DRBCN[KHHKG@JK?JOFI??MNJN@H@GKJEXKUC?AC?[d@LGCAKO?NCEHGUHNYH@MAU?@GU?F@TF@GK@DP@BDBRU^_@G?BGb@~@^p@^cCc@|Ab@`@pA^a@^^qR~@eSp@EEGKUEIF?GFKHJ?BHEBXJB_@FUE?@[JAMUACD?OADG?@EIOFG?BHGNF?GXBC@KNCBDB[J@HANEKHNHAINCGUGBUUF?XBKd@JDH@MGM?OBC?IKC@UDJA??B?@X?A?HE?K[E?F?@?QHA_@CCDK?DCWECJEB@NBOCF?CMLDJKBFMFAVK?EBAHOANBKFO?SAAO?BD@FF@??P@GKNJD?RXd@DUJ@?OA@DF?GDIE??CJU?BHOAMGX?N?MJA??[QSCAC?O?KUBMFFA?POHMK_@OHBRNBSUHG@NB?DKOCPAG?DBA??D?HODCRAEBJCI?@DC@@@HCFTHH?NBGHJPG?BCNC@?EKCEFQ?KAN@ACGEB@JWgPDN}Ae@cAa@fAw@Ee@m@a@{@^e@cA`@a@fAw@e@m@`@a@^w@e@m@a@GBKU?@FLGHHEU@HJ?UDFVA?H?DABQEEEEEEEEEEEEEEEOFW@@AFAC??F@G@@JE@??LAVIA?GEAEBBHNFJ?EACUXF?MC@?D?KJCB?J?[MEIZTE@UJEG?@NKJUMOJNOP??N?AN?@QKAAUDF??MW\d@B?HGJ???H?UCF@EAIGDFFUUBXd@@AA??FF?G?ILREJKC@B?MDBHA@DGIH?UCC_@@_@Xd@NU_@NE@CFGHIJ?[CJFJOOK@B_@IZBFH?UFBBJDJd@LANDBOMBKY?FKFCAD?VC?_@EHHOSEODJDJU_@GUBEPEMFG@KMDGH?JMARJ@ADAI?A@EC]?BK@AEHGNN_@TAENBAUA@FUDHKJPEAC?@UQSEJDCA?KNBUz@^a@e@j@iBc@e@j@r@^a@e@`@^c@e@e@j@o@c@e@j@BMPAEHEGU?C?KDUAR?C@JKHJGIZCM_@EA?@GBJDd@L@GC?FHA?CYHCKC?IU_@UDUBGGFX@AD_@ECADDD_@J[JDH?H??UUJIZANAF_@CHD?Md@SX?A?FNJ@GUAA[I?EKE?OA@AE?Xd@NCAUKGCGIBKAJF]??BABAGJBBFTDOCUNDD?GCJEPM@?MDHKQ@UDV_@HKC@FOB?CKE_@SNBG?FNM?O@DP?@?F?NDR?HAE@LBO??KCN?@BM@VAA?DKU?K?ASDHAUDUCU?DPEBJA_@NNM?ADRAIB@FGMGCMFXIZH_@DUGG@K?J?d@LFNCB@CB??GOMYKJB?EMAEKFTYWFFKKHKHG@HHULH@DG?EN?MHVUJSFBH?FFN^Fe@`@a@|@q@p@a@^|@q@p@`@a@|@q@p@`@o@c@e@j@o@^iECP[COA?MNBHGC@F@DIDGDN?A_@XBGCBBMQHCJUCA?@WFFC?OOHA?FK?U?JL??@J?H?VIMFMAUC@?K_@X?L@AB@AJ?FBCE?A@DYFBOK?FUGTLHCEK@@OBGBV\d@?@OENEFB?NC_@??HIGACENXCHDN@BGRGM@??@DHIA??@K?M@KB?BCHAXGGFUGF?@_@[OCBGMDG_@NIZB_@@FN?K@DGM@?Bd@FEDMBJ@IGDFFGTU@_@KGDCHGPJ?ADNGJOJC@AAJQE@C@UDABWP?D?BJDAH?DRLEEEQEEEEEEEEEEEEE?BWBHKABAAACHE?CHHGGL?J?HBCV?EAKUEB@KACDBFSFA?CD@JNEFOCD?DAPOUAOMBRI?D@KAJDH@OB?z@_BNc@a@o@p@`@w@^pAyA~@n@j@^b@eO^~@c@w@y@^m@jB`@XN@GGD@G@G?DJ@HD[EEMAGNIIZBOKKG???CHCUd@LB?F?_@?D??B_@DBOGFFYOC?U?TDAG?@M@ECIGGGHAJGOCXF?_@CGU??E?UEJ[GBNGBB@ENBGBIKKKOAJNKOHH?XBONCHA?ENHDU[CKABM_@MO??I?HFX@KEO?OHKDF[IECE?@FCOHDGXRICFAFDF?ACUU@Xd@?A?ABUUH_@AId@L@?HBJBH?OK?YRIB?GFMCH?UKE@CXEUGK?DMNGFC[UVNMMMKFBE?JSDA@G?SOG?DOAEHDPMH@BABOOMB@B?FRU??_@FE?EBAIEBS?UAJ?NCMC?Pd@LUEKFUC?E?B?_@YWMHKCO??HMFFLAOPNGGKNM?BR?UG@NX@@?G?OHOK??[DNGNUJEDAG?qE@DCKgEq@iAi@m@`@^|A^i@m@s@c@k@cEi@m@aAc@a@b@^n@j@g@h@IAMM@?BBC?_@XU@???@E?UUF[??UMCF@NDUM@CCHI?BFUHUO_@F?X@ENAAME?@B[K??OV?JUANMH?AAFUS?DMGE??KBDCPEKJO?MUU?OMURICFBAHBJJUHBX\d@ECHFAAEOAI?E@?d@BJGAHCEHD@EFHIB@GDN@HA?N@??XO?N@?CEC?A[MGDCF??NKK@EH?I?EAGO_@GNMBMXd@?AF@UHU_@?DI?HICFF@EC@NKAGXd@HOGCD?CCHHBI@CZEHBCCCGCGAd@CJIMEBB@GC??XIZA?N?OHB?BAO?J?Fd@FHDAOKO?ABUMCJIEUBUHFUHXP[MANCBN?GCHKILQJJC?@@?JF?EBCMWABBCABBCKLUHBET@FCCKAGOPHNP?UH??GC@?H^tSK@a@b@i@m@`@h@^b@f@m@`@h@u@Da@e@s@c@k@^i@e@s@c@k@}@i@Qm@jB`@w@KECH?NCADAHG@WAUBMEJCHCLRBB?@A?AJ@CEFIZ?BNCK?OF@HKd@J\GMU@K@H?@MCd@QSHO_@NU??BJOP\d@F?KDF@?NJB?CMMI?JAKAB?OU?_@J?XGN@U@C_@O[MQEEEEEEEEEEEEEEE?KDW???C_@?UMUB?GACKCJKLDVHB\HDG@@@JGE??CEO?Ad@OF?BMGAG?HCH@H?AAIAXUUK@@JCDNR_@JHB?HH@??I?JF?E?A_@?JEEDMGONXM?AMN?K[UBFCB?AMFFOAKCIK?C@M_@MM?NC@XNU?CE??CGBC[N?A_@MGOKU?@UN?BIOHBNB??@JXd@U@UBF?FFDKIUHCIE@AKJ?MD?FBCDXBFMU@DD?H[IZKNHG_@UE?N?GKd@LHNDHACAHFCYMKAIz@^CC`@g@De@~@k@y@{@m@`@a@i@`A`@g@e@{@n@h@lTe@p@`@g@a@i@ADAEMO@?XAENFCF?G@B?CU[?@ACU?KJ?I[I?CCO@BFDGHNXd@LON@F?OUK@AOYVIJ?BUHJ_@_@JAXGULBKFJB?N?BBOVIBG@CAB_@MGME@JX?_@NDC??EMG[BFEFZ@NUHAUKCd@LR?HNJCCA?H?OEAI_@MC?HOGBHAAKXd@JD?M@@NDMEIFQFD@EG?GJDBGMWPEM?NHNMKMDNURI?NE@CB?CDMXCNd@OD?@AKBO?MOIZUFFHNHE?KFCd@KQ??H??EGUEGWKFALGFKCGCDHMYRIAF@O_@CDJCH@?@XHADA?GAOU@[@FBBPEGN?JGG?NQSC_@GOGA?_@CJJNP[AMFU?F@MEDGIZTAFCJE?C?M?PUNLDABNH?@G??YGIMFEC?@FBM??D?XU@U{BaA@`@k@g@e@~@k@y@{@m@`@a@i@`A`@g@e@^~@k@y@{@n@h@^a@b@aAc@K@BHF?@[HCON@MDJ_@KGIWPABMBK@??CH?RTL?A?K??CODGDVP[D?BFJUF??ACI[I??FM?CUNBNXVIBBA@EUU@HC@X\d@UH@HCUKUKDEFIZC?D?GHCB@Dd@HI?FK@D??ME??AXd@D?B@?U??CD?IYWA?M?FAFC@HLUY?NDOFC?@_@@@ETL?FBDCCKNBH@V]T??HFKF_@FE@PGD@FQD?FUMOJDHJEW??KGJNH@GDDLRDC?OAF?_@NFCIP[HD?DBCMEAFI_@?HIHM_@@EHAJH?Xd@KN@@F@?@GHDID\BB@FND?EHOGd@HLG??ED?AEACY_@Ed@NFF??CA?H??IZEONA@FOBCHBJGd@GHMGJMJ??UBITL@MKJO?GJHOVHQEEEEEEEEEEEEEEE?OWz@|AM|@c@a@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@^e@s@^^A?BAEEEBJAOEGO?M?LD??HF@N_@FNGJ@HVAFA?US??D?CCH??JMC??ANPFMOKMFUFNDMDJC@DRADJIZUO???EOC@NOBMKNFd@?@UU@H?E_@KKAFECCIG?JJH@Xd@J?@GH?K?CGFIIZ?D@AHGBDDGBFD?BCd@FK@??FDCMIZUFGBABF?d@@?ED@BFPCCMUCAA@GCUQAMJA?AAAK?DGO@@@WNBND@ACE@BLENOHHCFBUNV?NBD?JG?GHFKGOAESANC?EAEJFDG@PE??U?MCANRI?MFOOBBHCCKFXd@EB?HGNBJ@MEEIZ?M@BHABJHd@HB?_@KI?_@H_@?MFKXd@HKNM?JOCUGNN?C?GIUCGFUUK??EG?XFBHHD?E[E?OB?Q?BU??HFOGFKeCH^iAi@m@`@h@u@b@i@m@`@h@k@g@b@f@n@~@c@w@y@i@m@`@h@u@a@o@p@`@^^WAMJ?CBE?@UDHGNKLDE@A_@GBCDNV@DEAGUA?HHBOS?FUBUBOAAOCEGCKP?@HCM?M?HG?RB?NUFFOCGAIZ@BB@GUUOE??Ed@LGABC@H?KABOJYWCHAG@MAHLAAMGCAOXFJEGMFUJNKB[B@NO?UB?E?M?MIDUHG??J?HABE@XB@?FHUO?AM[GH@?AFMAAUO?IF?BUCOCG@OUNUHNXD?D_@BCE[KFNB_@?@LA?C?U?CDO?V?ABKD@EMGFDBEFSN?CFDACAFFOFPE@MAAABJFRI?BEG??EAA?C?Xd@CG?AKJ??HGH@J?IJF@NJBM?XJG?NEFIJGNGUDMHFG?XB_@B?AM?MOC_@AEE[?C@?BMJDBKFUI^^FmEc@a@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@^UFMMKF?FXDFBCE??O?HBOCCA[?GUGAAENK@F@DINFDJF@MOX@KHIGAOFJ?MH@MBFGXFDJ?N?_@JDEJ?A[??GBJG?MD?HKIBJJNBBOMAXK?ARHEEF@@BF?NMKUIM?JMMAFNC_@KJ?FDXM?AH@KOE[BI@@HAF?@KKXEBGJQM?OKO?MNBDABWA?DCOJ?G??J??LC?JOJB?UJ?VIA@GBOKB?N?XHQEEEEEEEEEEEEEEEO?AWO?JMOBGCEFOGGGOEL?EOU?K@AUU??HFVB@HO@MONSBDN?AJFAFrDFJDP?OOCCEGBA?JDCB@_@RG???JE?JIBEGFAMUCJHGFX?UGDEBCCKJN?UAJ@[A@UN??CDIZOUJC??F@z@pPa@b@`@r@x@a@b@`@u@cAh@r@x@a@b@`@w@e@cAh@i@c@k@e@p@|@w@e@cAh@i@^iEUMd@LBDBHU?BGB??AJH?Y_@?NFG_@DCDTIZOAJO_@F?BFd@DABVNGBMFEGMDA@UH?GS?UOGJCJFADG@PBN@DN?MC?RI?JA?ADM?AUG@@XKDA?A@_@UJ@?HCA[A?JCDMFDEI?NB@[D?C@BNGF?IZOUEOMB_@GMFG@?@Ad@B_@A?N?@G_@@H@I?AGCODAUG?Xd@L??JJK?M?GNHYTLKUACHADBJMNBOFVOMBBKGAOAS??URNCBEK@ANKMIZU?HJNBHBBCJEDd@BOGOKKNFAONJIDZKHGHGCA?d@?BHO@L?MGNM?FU?@JYGKG_@MUGUB@JA?DOTKDOMAKBFHOP?MJBC@@G@BKQSBUF@K?@@?C?DUJP@?JBB@@AdBUjB|@w@e@cAh@i@c@k@b@`@r@p@h@i@c@k@}@|@w@e@cAh@i@c@k@a@b@`@r@x@a@b@RIB@KM@UB?KKX?B@AIAMDEJB?AH?CMXUE?CFAKJCB?A@[HH_@?HHB_@FDIJZ?OK?H?UCEDd@RIA??GG?NFKBO_@Xd@KAN??O@JGG?OI?ZG?GUMGEMG@d@TLHCFHO_@@FCAVE?IGA?BUF@@@EOH?XAHJ@JME?GMCCDA[KGNFHAD_@FJIZ@?OME_@_@GJ?d@OCHSGKGMDNUH?@ECNPAAANE@FOB?RI?MAAK_@UMG?AXJX?OG?FHHKC?K[LRA@GHJEOCJ?BNIZCJMUKC_@@J_@GUEOd@JMCCGD_@?IHHOAF[BAA??CCJCE?BID??@GEKFA?@BCXBBJH?M?HCUN[JDBJ@FC?DOKIZUDBCOBU?FACNd@LGGBEAJHENz@cCEODYWa@b@`@r@x@a@b@`@u@cAh@r@x@a@b@`@w@e@cAh@i@c@k@e@p@|@w@e@cAh@i@c@k@{BzT?BH@G????LCADZNFA??J@MGJd@LUB?FBBFB?DHA?F@YM?H?@H?G@?TLJ@??E?OBDVJ?KA?[_@_@DDG?B?_@ED?IEHKEN?OAFKAUXDJM?N_@BKHAD[_@GA@BEDJ??BEIEEZEEEEEEEEEEEEEEBMd@????AFDADGC??@G@IJO^^{EwC^^U?DGHUKOBD@MCH?SKMMP_@AG_@??B_@?JE@DOd@MKGBVBKCM?NN?DCFUEB?KCCSOH@DU@AUEE?EPKA_@BHE?USDK@AA?ACUJABGO?GDV@D@OABAE?UG?XH?NKF??IVKGGCCUM??NM?DC?OCXNUB_@?BUA@?HUEI@FNN@CGFMKD@URGEFDJ@_@F@DMGD\FH?@@EUKDGGDMAFBLADCCDDKMGGWEA@?GAU?AG_@J@QNOJDUJM@A?GM@PJz@CK^r@r@r@r@r@u@u@u@k@k@g@g@c@q@q@q@q@q@q@c@c@q@q@q@q@^^?K?BONNFC_@ICFUJFMB?F_@KC?GCKRAFBAJJ_@BUBH?\?GBJ?G@JGG@UEDL@G@OH@??OUHKGWH@HE@G?MNF@DQGMCBB?JGFJB?PCC?BODBKO?AFNAHIJMFUNCHJFAHHOR@@E?KMFBMHB?@\U?OCFUAM_@F?UNLDHM?CNUBKK?F?WBHBJCD@?D?F?UJQB?C@EH?GJG?PGJUJ?UBHUO?EHOENOIC??MCBMC]UG?MOA?OMUBBUDL???@BEC?@AFJFCIED@DB@HNOJCBREGDAFGDKMANDK\ME?DGFJGGN@CHLKMEK?F?@?NCKFEW?MCMKFJC?CAUCQKBD?FMNMO?CO?CPM?_@CJ@DJ??B?IJ@AC?EO@?@_@KCRCBOH?NOO??F@M?E\HJGNADGBFBFOL_@CCE?CMDU?^mAmAmAmAmAq@q@q@k@k@g@g@c@q@q@q@q@q@q@c@c@q@q@q@q@q@FHA?NWKA?A_@F?AE\U?A?FDGACEUJ?@LNGJ?@@DNDNMAGWGJ@GFAEBCE_@ABQ?ONDGBDGBFECOP?FHCB?DN@HMBMICDC@ODUG?FAMER?DGJH?NF?AN@N\C?F@HAFEAD?DKL?DB?OCH?GCKMBM?WNDOMAUKF?M?UBQ?H?ADE@CO@D???PDGGFC?MFUULBEEAGUAK@HUOMI?@??F?ED??JBCRAHUMBKBBGBG?C\N_@UDB@K@CUNABFUL@B@FJ?H_@DAFHOBWMKO?K?MEOM?RKH@H@D_@A?DH@\?N@DBUDCHBC?FCL??FJDOKC?NCGEWBKFBAKE?FFJMHHCQHQEEEEEEEEEEEEEEE??PHMM??BUH??BMCHC?KI@KC?AKBGF@F@NGA?ORKDAUCB@DOG?LUU@KEEEWBBOJz@rAiA`@o@c@k@`Ah@o@c@k@`A`@a@s@g@m@`@a@s@g@m@a@b@`@h@g@m@a@b@`@h@{@?k@@`Ac@HUJOFAAEJGQM?@EDD@FEBCFA@?D@PK?D_@UTA?O_@UOKBB@?FJAYBF_@?DHM@@AG?N??KLB@JOG?FUODD?GDN?NIGFUUCN@IBGMMEG??AA@@GRO@?FFBCAHCUABU@\@HFHNM?FDBDBG?ABHLE???OBGMHSJAM??H?E@BJ?VC?AGM?CJ_@?B?D?XOF?HUHF?H@JFDFCDOIO@@H?KKBKAQ@DEH?HGDN?KAPU?@J?BJCG_@O@CIG@C?HBC?DCHF?GOFNRKAFHEH@ON@?T?EO@?B@@_@UBYFB@C@HKJGAFBALFNJ?MKKG??OO_@BOGKICE?HOO?ACAHML?FHBBDGM@FAW?AGAGNC?JH?NEQJ?HND?D?A??EGADHPCEJECABOE@@?JL?N?E@B@NEGGTGMOCCB?EK?@mQU_Bk@`Ah@{@k@`A`@a@s@g@e@cAa@s@g@e@xUi@c@q@p@a@o@c@k@`Ah@{@k@`Ah@oANYBCOBG@BUCE@UEPBHNHUA?ABMFUBNKPNUABFCHG?ZJ?H?DN@HUHEAP@?MHGFJ?F@AB?SGJG?FO?A???MNVU?MGMKFHKDCF?UXDAAAGF?OJ?AUIFJ@?N_@GEG?M?GDRH?C?@JFF_@BBCK\EOHH???@?GMJBDLAF?@MKMBE@?EDBW??@BB?D_@C??JQ?KFD@BNO?CH@HPNCAU?HNABCMC@DICUBBNUCMCAN?KKR?KK?HUJCKCE@WMNA?@EM??FDAMBQUNU_@NHN@??O?J[_@ONJCFAU?F@D?[U?BJKGO??FOUOTA?GBCM?BHA@KRADFEB?BH@CAA@\NDM@FEGGCN???ULBCC@E?FUH@JMLCFAHEN?@?EU@@?WK?AFKOMEGhC^e@^i@?c@q@p@a@f@k@g@m@jAi@c@q@Ap@`@h@{@k@`Ah@F{@m@a@b@`@h@{@k@`Ah@{@k@?I@HNDD@KB?YHFKA??C@K?A?@?LGNA@HA??@UF??ICHKGFAO?BBGKBRFBCBFFH@?J?KB\CU?GFBC?NF_@D?JLGKN?JM@AAEG?BW@BCANCJJG?M?AFKQGKJADGGDAKFVMUNQEEEEEEEEEEEEEEE?GGPAGADADUJ@MBKE?DJ?JIN?BGDDMGCKFOAFBRDJBNTB?C@DKEHU?G?N@?B??Y?ABJ?BMEC@KGJMBFGMLIV?AA?@JBGOOHGCUJ_@EOX@CB?GJBDG?JBA_@AOHIUGBRPCHEJ_@N?HOBN?O?CKBIDKBB?HEGO@G?GC?_@G@RANUJAKK??\@?BNCNH@H_@DLEC?FCB@H?U@NJU@FMGWOKA?G?NGF?U?F_@QOGJ?@_@HHP?CGDA@z@BGU?~@jAb@x@w@i@s@h@a@e@c@r@Ji@`@}@p@c@q@q@i@`@}@p@c@q@i@wS`@CK@A?IOCMA_@KD@G@@BEBGRO@DMDDU??D\NGAEGNFKJJ??BLAKD@FA?UUNC??N_@AWCDBHB@??GHKJ?QHCOENHD?HEHPBBG_@???NJ@HF@@AI@?FB@FHMBEBFBG?RHG@CJAGINEMMUEAGM?KK?_@?R@KEG?J@COHOFFC?\MNFD??ENG?LCJMBNH_@BBNFHMWO?FMNK?NAHH?@EA@QKMA@?CM?ANN?POHF@H?UUC??GMI_@JJ@HJCOEAHFOCRJ@CHEA@CAON@G?\CD@DBC?MF?LJBMGO@NEGMAAFGWG@KKE??CAKN?BDKDQFD??H?BKGLJAUK?J@MHNBUAOW?H@CAUACDHJH@@BQ?GF?HFFECMC_@P@EBCHC@NU?O^a@b@x@w@i@`@a@b@x@c@w@i@`@h@b@x@w@i@jB`@}@p@c@q@i@`@}@p@^nAID?A?GUOUAK?B?BAR?ACMGAKB?FUQAKO@CFN@J?G?PFE?K??U?DFCCINU?@FMEEFHNG?E@R@DUFGM??N@\DMJMJEJD_@CBKOLU@C?@D?H@?KAC?@M@WGFJBHHIAUGGBBBNBJGU?E_@RFNA?EDGMK?B?NG?G\?KO@NFCCGAL@??DHBECKCACW??FFCCDBHMH?U@FBQEHAJU?DHABF?@P?GGJ?HBJABMI?MB@A@HECO@DB??RGEGBCUNCKAKUCB\O?AJGG?C@MJGLC?@BC?O??ODUAWHODBUCAFBGJNHCQCNGFCJ?MHJB?JP?DGED?ECBCE?IGK?GNJ?DOG?EF@?RB?@OBH?AJK@CMBB\J?C@HFAPJACEKHHMO?UuTGc@r@|@h@b@p@c@q@r@|@h@a@b@x@w@i@`@`@a@`Ac@k@o@~@a@`Ac@k@c@w@OKESHBMMJ?AK?DJF?GVBMEKDDJK@_@XKUGDUQEEEEEEEEEEEEEEEOJPHAFK?UNAF_@FJGE?UMIFG?U?MFJFJC@_@F?ECRXI_@O?GJOJB?N@NHDBAURF\UDM?@?@CFJHCK_@M?IVL??O@CCFNFBENGU???IFDFK?CD@J_@K_@OJFNUR\PW?C??NCBNED@_@_@OEJFQH@O?KHU@B?FNAOOHNP?DMBGD@IK??NUFKK@G?R???UBJKABAOGC?AAH\ODU@CBNBO?_@K@COLGDH\J@DCDAFO?JNBBEDNALUKHDFMADN@F???D@BWIVDN?UDCM_@O?_@UJ_@NF_@XUDG??M?HAF_@@@UOEFIORPGJCBF?B@HUGJB?G?Iz@y@w@jAc@`@m@f@iAu@a@c@`@c@`@e@o@iAu@a@q@h@e@oA?N_@UDAEFD?FC?GJ?E@RJO_@OF?PCN?FFAOF@U?FSB@DE@G?OBFKCBU@O?V?EO?AUAD?UEAXD@OHMKI?C??JCDO@EJ?@AENCRUAA?CGHNF@HDKHE?\@EPDAEG@N@MOEOK@@M?BIBDHD?BCBAC??K?RG@@?@\BO?CB?@CUDMAJGJ@LG_@HFAA@DUUHEMK?@?WDCEHUQGF?UJFFDCHGNEPBBKCHO?BJ@GCKGACCIJ?EGOJUHURM@@CBHGJ?\DFAGCJB?A@?@GGD?BLMH?@EHD?NUOOU?W@MUKHEQU?GN?NHNMNBGGAGPH?BMG?NJ_@J?EC???I?@AHGHQAAUCOA@?EFDA?PDBJH?N?ON?^EOBb@u@a@q@h@c@`@m@f@e@g@a@q@h@p@i@b@r@a@e@o@iAx@hVEEC?IDBMOB]??H_@JE??CEHC?LOH??E?UNJJ?JGOA@BIFE?G@J??F?RKH_@?M@GB\MB?EFDGNNM?UCM@GHLF?DF??DBEFKGCWBF?J@??QE@CACJBCOAD?GNHPDNOJOG?KCC?CCUID@HU@?GHGAR@KMUDJEB@AM\DAHDNFJC?FUOCM?BLMH?JCCCCUDFR@OFFJGCGN\?CGH?FM@?KMEJBGALDBA?@HJAENC@ICMEENKF?GWHHUABG?AN?UABCQ?GKNCMFC?KBNF?HP?@?CCWC?JHEBC?E@EECK?QHA?@CAEKUJJ@??PGJEQEEEEEEEEEEEEEEE?G_@POB@??A?HD@UGE??AIK??MH?MCFEJFJA??Fz@^~@j@a@b@p@c@k@r@o@mE`@`@a@e@x@c@q@r@{@o@aA`@a@e@x@c@q@c@g@o@RUA?JID?J?E?HNKJCB@O?JR@CDAJFFENE??DGU\B?CNN?LACKBKMK?OGC?FA@MDBW?@E?J_@AMMNG@QCNG?MCADHHF_@UFC??PJ?DUNFJGIG@AAG?GAAGGNCCF_@MHRNKMD@C@MA?\D?GHCAOK@_@@DK?CAD?LFMOHN@BEW@EMBHUFBAD??FG?HOJQH??MB@?ACOPUADHG??KMB@N?G@OJIGFM?BCKFCSJ?C?F?@MAB??FHVC?AK?F?B_@GBH?GX@M@GD?NCBGIAB?A@G?JU?M@C@HHR?FO?FO?NAEN\D?H?U?JFD?BCHBG_@CLAMOA@DKNWA?BBAEDOUJCBC?CGBNQN?GBAFEUUVANUH??BFH?_@KCABBXGMKK?F{B^?^`@Ba@e@x@c@g@Go@i@s@`@a@a@b@p@c@g@o@r@{@~@j@a@b@p@c@g@c@k@r@{@KGID@_@GHOBMC?OH?ROAH?MA@O?NJCHG\F_@?GCG@FNPCMDAKFH??JGBBJNKUFSAEG_@?UJOQJAJB@C?_@DA@DOGBHOPD?@?_@FCAUHOIBAJ?_@D@?AB?EUR?BGGJEDCCAM??\KFEO?COMACN?MLDGNBAFBG_@HKNEGMWKC?EFDGE?EOQOBFFCD?_@KOBO?OCPAH???AAAOGFIBAB@ODK@??BBBGHBRGJ@?ACNCKTAFCNCEHOKMCNFJ@??BYJB?DEAKF@LH?GF?NCFCUMCWCBOOHCA@??JEKFGQDHDE?EHF?KP@?GFN??@?O?CDOFOIHU?@NEA@_@D?@RUB?HMGJEMMFB@COG\@DOBDBDM_@?LBAADCEEH@KEN?BNMWMbCE`Cs@`@a@e@x@c@q@u@o@i@s@`@a@a@b@p@c@g@o@^`@a@e@x@c@q@r@{@r@{@~@j@BD@AGCAUQBBJF???A?JOM?A@PCDDAODFJNDZDDCF@DOGKMGACPFAD?GDF?COBUSCBC?O@CE?CHVCOF@?H_@OC_@?AAUJXDCUA?O?DCEEIJGBUNHME?AH?@_@??RFA?G?FKAURH@CCJ?O@EO?O?CH@DJ\UFJ?FCJBFUSEUG?JH?@HBVGG??AAK@A_@NFM@CBX?GBBQEEEEEEEEEEEEEEEGCKPD?OENEFHUJNAA?@G??IOB?EMKDAMDCKGCM@RFDNSUDMBDF?NB?UGKNJA@NVCGKE@FGC@DDKEOAEX@KMKIDAAGBHD?CEHAGGHOCGRFOBUBGBENDC_@GJEUN\HBGFHJLU?AM@CHDF@BDBNFW?G@@?_@G?A@MHDGD?DGQz@e@cA^x@`@k@a@r@y@o@y@o@e@m@`@h@j@k@g@y@o@e@m@`@k@s@c@a@?NK?CE@BFFPBUFJ?ODHID?BG?@ND?HB@C?AFD?RD?ED@FD?UFKUO?G?\BJBSK@@BAD??H?NM?MGBM?VF?HBD@FCEF?MFX?BH@HCAIAM?FAGUMEMAEB?N???R@?DABFBACE_@HE?BG\FNMFBCGL?O@BODU?AGUF?KNW?FHHM??@FODKDGN?@QHMUBNBAGHP?K@O?KHND?F@I@BE_@@K?FJ?GUEJJKK?REDUB@C??BNUAO\_@@AOECJNLHD@EB?ABGNFHH?BJGW@U??AKGCFCC_@?GJQ@EHGH_@E_@UEPND_@ANAJGG_@C@FIAMF?BHOA??JCGUDUARF?@DAECHG@BU\G?G@FO?MANLJMFBDAMUEH?F@?FOWF?E?FHF?CEMKCQ?FFDKbSMAj@k@g@y@o@b@i@e@hAx@hAx@`@k@`@k@a@b@i@p@s@c@f@m@`@nAH_@?FCPODMKAC?DMOJ_@G_@IHB?@BJFF@JKBBR?@K@FAFMB]G?FUCAEBG@??_@ALA?GMKNGJFG?GAFKFIAGNKHK?MMBSMEFMKC?B@BDV?FOA?U@NN?@DB?GD?XKGFOHHE@GMDMI?EF?DBDEK_@BRU_@BHACMMAGMH@D?\C@HOAABJJE??A?LOCDA@BUK?FOFWDA?@H_@BFF?GGQ_@MDC?AC@FMCEDFGPCFADHAEK?CB?AIA??CFCU@_@GCRHGHAGA??U_@GDG@KA\NBE_@NFGM?C?SFU@AFOB?@OMVEJ?JF?DAD?FDJMDHXAAGCGCMAK?@G_@@IFDE@@@BCQ@?@G_@K???F@C?AKP???GDKMN_@D?DUODI@@DCCAEUOE?`@a@FmAb@i@p@f@m@hAx@hAx@`@Rk@a@b@pAhAx@`@k@a@b@i@a@r@e@hAGHGD_@J@C_@\BFDBBMJNKECHGDB?LAGANA?DCHSJHCDCACO@?DBAVEGJODBB?DKD@NCCXCUGFMABF?AN?HIGBMQEEEEEEEEEEEEEEEGKPC?FDBFCMECM?CFDA@ICH?H@FKUMOOEH@ENGRRP?G??B?NBC?ACG?EBGI?GRC??@HBMODKEDMBEQLTFKOAAMO@UE_@@B@DMHYMBA??GO@?EHC@EOADLITZ?AADAOAKJAFGBC?AFPJG?@A@U@@D?NB??KHSFUCN@BJCVCD??BB?OHCXDNFDHBB@BD@KCGA?GIH??ED@J@A@MDHO??CRLSH?CAUGKGNEN?@CC@FVUD?AKEDFHX?U?@FMUFIZICKANJ?@AKHBG_@DK@Fz@q@n@e@a@e@a@j@{@r@c@m@e@a@e@`@a@j@s@o@q@c@a@b@a@j@s@RFEAAMKNGCBH_@B?FNF\TZC@?G_@MC@DHDE?_@BBCP_@DUF?B?EU?E@_@GF?ESKFADV?B?DAUNDBUHKHJXFDBN@NB?NEG@N??@CIDCUHOK@@GRHK@DUON@@\A?ANC?@JHG??J@FHGLCAC@DUABD?@JAE?WKCOAMIO?FUCB??GE@ND??RJCDON?UHCFB?G?A??\F?H?P?AKN?CNGBFENDJIH??C?ACDFJ@UDE@?AR?@E?NJB\_@NMCGHGF_@??L?EKUAN?CO_@MEJ???MW?EFA?OOCAB@CAQB?UGFNPOBOG@MBCGGAFGG@JIA?DF?H?UDKBGBC?AR@EO?LN?F@N?MG@DJF?HMI?^m@e@a@e@a@j@{@r@k@`Ay@h@gA~@i@u@c@w@c@m@`@a@j@s@o@nAoAFB?E@@GD@CFA??GRMJN_@JPJHEO?H@K@AO?BDI?DDA@MGKCUF_@BKEFRJKACK?J\BDCN?MCDE??ELG?DG?B?EECU@B_@DHKW?GK?JJOHNNJQ?C_@DHJ?KJPUDFD?FA?G?HBOGDIABBC@JUDCKHEHAFRN??DK?IDF_@NBGE?HHFBDFRMB@??@C?FCAHHMU\@HU_@?AULKF??MGFAD?KGGWNDHG??CG?MBCFBAFBQ?EE@DNKCR@A?AHOBMMD?O\OA?A??@J@JUA?@GL@_@J@DHN?KMJWNM@HDOCBHNQAHAGK??UOOUNFCPKBDBKKOEKGNAM@?NIE?BCSGF@EG?FUANGMBFUV?KUCN@QEEEEEEEEEEEEEEEDBz@e@i@e@cAhAm@f@p@i@e@cAgAp@hAm@s@b@o@e@{@`Af@a@mAy@r@b@o@HP?BFAUA?NHFFGHFUM@AIKB??NFMHA?KUN?M?\_@HV??KEEFUM?_@@NMF?X?G@ENCJ?AHAH?BUJI@GKHRLSBO?KG@J_@MHJ_@_@JJN?@V?G?NEA?GKHEJAX?DA??AJ_@N@?JBKF?IJMG@MMDJRGDN??F@HC?@JUAF@NH\?KJ?DCGHBANLMJECAKJOGFN@WKDDAU_@MHMGKHFQJOAABO?BAKCF@M@PKHH?UAGB_@???M?IGUDGDJMDB@R@?F?C???@HFJMDB?\EFD@N?HBUEGL@MA?MFEOUCDEBANHW?AHBACAEBCEQ?GJN@FADCCUEC?BPCG@GKK?GANHC?I?OFUJE?JOMNH?R?FKCDHBBOBHG\?DNBGFDDKAND?K^^q@a@b@o@e@o@e@o@e@{@b@o@Le@{@a@e@{@`Af@p@hAm@dA}@r@b@o@eVGGFB@JBOH?NDKW?BC?EEJ?C_@JHDNQCJABCE?G?HBF[F@D?G?MNH@MAG]?DBUUAHNFNH_@AABNLAA_@A?_@FL?C?O??_@CJ@CDKWCCABO?GDKKHDU???QF@DAG?C?@H?EGP?ND@MEAUJN?@HIDE??_@FJHA_@KGMR?GAMFKGE?E@GD\?JJ?D@FEDMFALFEHCBFC?KBFGJWFGB?J?BOC?MJ_@HQ??NO@HFB?HU??PDFCMKJGDDNJCUIBG_@HC?AH@NED@R?@M?M@HEJN?FK?H\KON@BF?C?CGGBLCGEJJBJJ_@EFFNWMC?A?GHANHAFQ?BFUD?JB?J_@BB_@PDCBECHJ?CFDCCUICCAG?CKON@?PGC?@E?F?@OAHG?SC@HNGE^Ca@mAy@r@a@e@{@e@{@`ApAb@o@e@u@a@e@{@`Af@p@gAp@hAm@s@x@`@F?BKDAVBANBADC?@DRGUCCCEBC??KKB?\H?AGHFDBK_@@BDGL?DBKGJCGE?_@W?JA??@NCDA?GGAJQUEG?A?@CKEGU?UP?@CD?A@_@NBKT?GH?N@NHO?OCYGDNJ?B?@?@?HB@LOFOF@UHGA??JA_@IDH?OE?BG?@?FRUHJ?DAOA@HMMBG\@DBJMOCJ?_@GBA?LJ?@?BU_@@A?QGOHAGM???@GFFPAF?FDB?AGA?KMNGEBICQEEEEEEEEEEEEEEEOEDP?ABA?B??BH?B_@NNNGNIGNN@??@U@BGO?MJR??UCIA?OHHEJJGHO?C?GF?FRHF?MCE?GDUNJE?AK?\?@QDOEEUJ_@G?JKAKFAG@OP?D?AOEK?F???CAAMM@IHHH?FHUG?DRz@NCGBr@i@o@Cr@dAk@c@c@c@cACe@m@Hp@a@b@y@a@b@y@a@b@y@s@f@i@o@r@nAoABD\GD??A?NNFBO?G??N?AL@HDGBADCHL?CB?MAKUG?IHCMFMDC@DJHCJFU?CER@ADEBCEDUDGFN??U\MJG]UUDM?B_@J?BEGE@OGNFL?AM@ECA@EU?EC?KID?C?@?JDORAD?MDCD?U@?B?U\AOG@FHHOOGKUFGF_@KL???UM@EN@ODNWHH?U?NCGUQONDUKFNAHG?N?BEANPDOMH??FDOG@@?IBF?UN?CCCA?RDDAKF??@_@JOJ?ND\?EEH?EB@ONUAMFLD@_@D?UHG@E?AWB@FGFFHUM?GOGQDBMDAB_@NKNFEDKPEBCA?JO?GKFM??I?GFA?DUC??@RF??OUFOBDJDF?G\??E?M?@NFMF?UF?LAM?E@B?^o@dAq@k@c@c@m@p@}@a@a@a@`@E`@`@`@`@r@dAq@k@c@q@k@NULCAE?CJFBOGAJ]AF?@AHNB@?J?K@DLCJ?C?GBB]ABHFDC?D?MOGUFLB?CDC?EDJKUJ_@HKAKIHGAOJDG?KSUAH@J??F@AFMV?BAKFJ?OA?B?AHEOX?EJUOBK@?AAOIGFOHJOCKKUGRDF?BGOF@NDO?FHF_@\?BN_@@?A@?G_@B?HLUE???BJ?G??WDJD?F@BJB?EAEQAOMJBGJ?AC?D_@@KBCP?@OBOFI?D_@GNJ?KAKH@@@RGOAA_@FFH@AEAMOFN\FMHGFHOAUB_@?L_@?E?CHBAUK?W_@E?@?NO@_@EJ?BCEJJQK?@ECB@UUK??PA?KK?GUBDEE?INACM?@MCD?EANURC?OO@BNFFUEAAJ\DO@OHMUAHHBNLO?M?H@B_@zUqE??m@p@e@e@y@h@`@a@a@`@a@a@a@`@`@`@B`@`@`@r@dAq@k@c@q@k@H?WN?_@??JU??F?AC?F\NBJBCKADZECBBBKA@CAHDEPCOA?J@??JK???AS?CC?CDB@BHJHVCDGJGGJF@HCHXJ?M?JFM_@JFMKAC?IJ?A?MQEEEEEEEEEEEEEEEOHP_@CAG?KGBFOJDCG?GFIGJCBKBODK?@NBMDNDRIVHAC@UMJMEKAKDM??@X?IGCJB?AGHJ@FDFC?G\QL@K?DD?BDGF?OOON?@IU?OU_@OJGUJB?OM@U@R\]LE??GG?BENDBH?@?FJW?BAD?@B?UHEF_@BC@KQGAF@GPAJGNGEH@@??DCIN?BACHNDH?DN_@JBECRCE_@NFKDHONAD_@UBJ\OF[CHA??@GUK??AH?@HO]DDFBAOM_@@BJUz@EBLFNjAm@o@j@m@u@`@a@m@o@hAiAm@o@Da@c@hA`@p@r@h@x@i@IEOUBABMKUCGB@EHHGRHHFCNA?MMDFUGB?KC\GKLDEBH?A?GJ@U?H@WU@?FFMOE@JJ@UH?N_@QBA@G@PHEBG??_@B?@A@FIKOMON@ACADMDG??UARN?OBGGKH\N?@BA@A@OGBL@FBCECD@B?DA?GF@WDBA?B?KDU?ACBHQHE@?CPC?JGCFB?F?K?DMFBIKFGMK_@?OENFHCFUFGRAMUXED?@U@OM?E?_@?DJIKJNKBDHKFMG?UJB_@BRN??B@CJ\_@???OK?BCBF?L?@KCKAH@?FE?@JFCWBD??H@?HCK?NQMCN?CDGP@UG?MUMFOBOJG@?FI???CDFAKC?MKGMRCN?@`@e@u@`@a@n@r@h@e@u@`@a@c@r@h@x@?i@s@b@k@~@e@u@`@a@?D\?DUECE??_@D??KHLFHAMBBG?ENOFHOD?UWGNELNKC?AD??@K?A@@DIFN??DBH?N?F??AURHOKHOO@B\HDMDEM@FDHBCCLOME_@HDCADAMJABD?W@GJH?CDGQUDGOO?CBCBDMPA??EF@KOAMJFF??IJNABM?K_@UCCGR?B_@KBAAN\@?@G?AK@AEBJBHHLK?GE@NA?NH@MD_@?WKO@BDHAQGOC?CHUA@JFCEMP@HFF?@H@NHFCMA?IU?@?KNN?DKAR@CD?BD_@?CA\D?DHH@UBKJ?FBU@L?UJGNEJBFDJ?W?FJD@KJ?OQKJBF@GDFJD?MKUPGBC?E??UF_@ADE?IUNGBACAN@BRAJBMe@q@`@p@g@s@b@c@hAiAk@Co@a@c@hA`@p@r@h@x@i@a@b@?@?EU@G?\JQEEEEEEEEEEEEEEEOBPN?GDUDOJ??CCMC?@AI@@E?BU_@EJ?GGF@CJHRLTGOCUDBUHB@FJON?D?Y??BL?FKBHKJF@DFGCMQIVGNFCDB?NJHCBNKCGHXJCU?HJA@IF?@B@GMGJ?RP?U?UH?N?F?E?H?BCINJN@?G?DB@MBGFBERJB\NE?PHCGAACU@UADDM@OSEN_@@FBBCHE????UBVBM?DFFK@X??MHUACGCEKKI@FDHMOOFN?M?DHBR@CCKG???GF\BUGBFC?EGDNL@@BFNF_@HOUFNJCWN???BDJBHKMCNC@QDH??EUGPC?NJF@@DKGEBAIO_@KJADNGFBCBOBEHRUz@`Cc@a@e@`@k@a@i@e@`@g@a@@i@x@h@r@a@Ci@p@`@g@e@?EE\EB@HE??AJD_@F@G?LKFGA?ECAODKO?OW@@HMJDMZE?CDDNM?NNAAUBHPJ@GAF?AFD@JJBSK@DA_@O@BFAB@VGC?EO@A@O?FCX_@?@FFB_@HAD?BIMMBEN?JCABMER?FKOD?AOK?BF\?B_@A@H@COC@DL?AAMF@M?M?JUW_@C?EH@MADMFBQBCKFEEAOE?DGPBA@D_@JK@UCHUACIUHOCD?F?BE[?KC@EEBHFCFE]AOF@C?NAJAKCHLNH?HC_@A?F@CINHAFGB?U?A?HRBAMF?KKDD@DHO\HGAKCF?EFCHABL@HU@OE?_@HBY?DKFF?NFDDMJ@LDGF?MHEB?AKA?IJ?CB?KFHFJKL^`A`@g@iAo@m@~@a@iAf@e@`@g@e@`@x@h@r@p@`@Ag@O@NFDCE?_@NWH?ECCDAAHKMSDBBF@FGE?A?FV?BUF@DFUEBO?XHM_@KUGNKA?DHICHA?KJ?NM???REBC?AC?MO@M?\??@@BUK_@FE@AL?JFB?GD?BOJKWDBF@GU@BEH?KQJCGA?@G@GNO@BFPN??@BF?_@_@FL?ABCOD@B?GGUWK?KO?A_@NCH?DCQ??@@KJFKAA?JPJUJEBDK??JDOIMDUBCJ@DKKKGR?NOUF?HJ@AGK\AO@CKAM??B@JFLGAJ@J?H?BDBD]OFKH?@AD??ALN?CACJEK@FMDBEWAQEEEEEEEEEEEEEEE?GKP?F@??F@?MM@??BD@?JI@BAEBKC@MHJGGUKR?F?@YFB?BBKCB@??J?CBDA?z@lV`@a@e@cAx@k@r@r@f@`@`@a@e@x@k@c@u@i@~@jAa@e@x@k@LEOJBKFBCFJ@GM?KBDIFA]MA?KK_@@GF?HUCB?FCLA_@??CEB?ND?@IOEDF@?FRSQ@AC?B?BNJCFG?J@OAPB?_@O@@F?MDJOF?DMOI@O?GBCBAFBRAGDFBN?FDMHK\?DKAFCBHMF?AKK_@OLG?M_@???@@GWNM@CM?MGJ?GKQJKG?_@C@?DKN?UMCJPBDFC_@@EH?CN@GC?IN?UC_@J?OCNGMRJEUAHFDDFGHG\?AEGKOG?K?GMOKUBLC?@?B@MAHCWC?KMCO?@K??CQUK_@@F?@HA??GH@DMCP?CGUHJB@EHJM?IGAJ@A??KUBHCRBMNA@EBAHOGAGM\EJHUJNJBAEH?FHL?NUKNB?UJOBWHGHKNC?KN?BFB?QKhCFb@cAr@{@`@h@a@e@x@x@k@r@HdAi@~@jAa@e@y@`Ac@Ku@i@~@jAa@e@a@??EFNF??PFOU?B?H?CKOBQD?A@D?@GNJA@PBOH?GDC?F?CCH?@IBC?@E_@BUB?TUE_@KJGBENMYDAEKAMKC@C?FH@GLDOC?GKKUDG_@HIBDOM@@BAAC?K@RUGGNMJUNA?EJG\@F_@HUFGKG?NN?JL?EOEFFH@MBUKW?A?@DBGAA?NB?@QJO@MHBADAEFDJKPCEE??CGGAHMIBH?@BJ?OGUOAR_@EC?FU??BD_@O@K?A\AMDE?AFEDC[@HUH?C@NDKGCG]GBUDCG@F?@@D??CL?DJGCO??GBOGI?CDKBB?@DCFB?RBJM@CKKDNFUJO\?H?@CMOMOM?B?NL?U@JAU_@EDK?FWN?GF?OB@M?KO?EQBN???OUJM@?MBMa@b@cAc@k@r@o@|@|@`@a@e@e@x@k@r@f@gA`@a@e@x@k@r@f@`@i@PH?@O?GBSUMNJGJGFMUEGDE@VBKH?DFBAD?FBGBXUB?BCE?BCK?IGC?@J?H@GG?DH??R?ODHC??HNNJN?\ACUDB@AABGBJLA?OA?FM?A?OCM@WGDCH?DCOCEUCD@QNBKA@DFOBCBHBPHMUJKHM??CKF@I?CCEA@BEMJC?DRNN?C@A@OCG??D\AMKQEEEEEEEEEEEEEEEAOUPD?U?AJ@O?EUUJB@ENKI?MAD?G@GA_@KGC?J?KCRIVG?AUA_@?B@MD@N?AMKMXHOBDG?M?I?NM@JADBD@R]LU@@BF@UNAN?HOM_@OJ_@W??CBCJJFCFDFAUNEBNQPBMPHB?CE?OFFJUUKAHNCI??CEOMGUCJJMACUB?CRGAK@MAE_@C_@??B\DNNABA_@z@e@~@c@q@a@e@gAn@~@c@q@b@f@e@~@c@q@b@q@b@f@n@jAu@e@k@LF?NC?M@?DGH@GC?UEBWDFUGM?ADKN?EDDT_@NJJL?EFH?HCMD?U@BHNJ?IDBJBUB?HMFG@D?GARUOBCU\UEK??EC@@HB@CBCHJOLAG@AHBDBJ?BD?U@CWFAFDAAKQ@FNJ?@FF@K?EBMMP?C?N?F?@AEM@M?HU?IJCCUDB?HJA?NRF?CBA@CDA\@CA?UHC_@C?DOB_@C?KLC@GG?JNA?DNKAE@BWAMHGPN@O?GCDCFGFFCAOAD?I?B??CJEJH?M?MAO?RFGFJDME\AHNAAO??DM@HC?_@LJ?G@GOF@NNBC?HFJW@?FD@??BBHFQO@NH@EAKD@?P@_@?B@BK?FDG?G@E?HIF?G@?NB@JBOCUERBEGBCOE\DFF?M@`@Ex@j@g@}@r@`A{@x@j@_@c@a@i@m@gA`@q@Gb@f@n@jAu@s@^AB@@UFJLE_@??E?BKDEHGNG?[FD@U\D@FBB??E?CBADUCBCLD?UE?BC@KHAMJN_@W@_@?D?UBEQABKGABDACB@A?BPM???AHAHCGO??MGEHICHJ?_@U@CRG@BCJFDAGH?AJ\J?AFJ??@?@O@AMEC?LFJNFEDKO?U?DKWAGUO@KUFADQNMOMOBBOC?AJDOBFP?@@ABGB?HFG?_@?ICG?AFHJA?C?RMJ?G@?@FGGA??\KAKN?@?O?@U?@KUBBLKAHM?JHMLCJHNF_@HU@OJC?IGU@EFKANDHFHNNB?RDEGCFBCNGBN\DDMU?@H@DFANLAC@CK@H?GJBHCGC?WHC?FFNDMBEEHGQH@C@ADB@@NHDPFDCCB?DHG@ONB~@c@q@b@i@m@~@c@q@a@i@m@{@x@j@g@`@a@i@m@`@q@b@f@a@oAIN?DO?JG??BOCF?FSB?CJF[UN@GF@HBHB?@?MDB]OAUCO@?BNAGM?OLB??JFAEA@?IE?HHEG?CQEEEEEEEEEEEEEEE?EPGDAGMM@@NKEJUEAHKIAHF?JB@FU??CEF@AARIVCFKBBH_@MNN?JC@H?JXBIGMFDAKH?GCFUF_@ONSQL?AHA???_@FFN?AGD@KIBF_@@DBBJOKE_@ND?MUR\QLOG?NEK?MGB@HD?ADNI@D??JAMF@GOKCN?DGR_@A?U@O\GG?HCCH@?FNHLHMGDEN?HAOC?JABCJWC?OHB@CHM?G?FQGBHGJPUCD?A@@DG@@HGFCA@I?NB@HFDKE?AACNNM?RLSA?NKO?B@A?KDCBGAJVz@mAg@q@c@x@m@b@iA}@`@`@`@`@o@pAr@mAg@q@b@fA?HNUJ?AFU?OBA_@J?UXEO[BJ?BFN@GBEUHJ?HOE]MJBDM?G?NH@BJM@KL@^aA{E^eAeAeAwU^NVU??AODCJ??BC@KAJJMMAC@O?JHJECNA@WF?\DOZAH?FR?HD?OMJOCE?J?GJHBG?GDBFHOFAPMJOLTDFAF?CMECF?UVD?HCJOAKAHMH?A?@?HKNID?JWOFBDUB\CNNCGES@MA\HACKEAA@UWJCGG?B?EDMFPMF?O?FCJNU_@PBK?UCB?CB?EFCBIN@N?C?BGDFCK[?ANMA@CHAWEHFEEC@UNBME?IG@MH@K?B?BD?ZC@?GEM?KEACQG?BB@@?O@IV?AB?HEAKEMJFAMDS?CJMF@EJOIVFCEDADBZBMFM@OBGDBOHABY?BAO\HH?MC_@MOJHPGFNKGBC?GDHBB?EIGG?CMDCCKBEMWOK?HKNNRANOTA@GOHADCEOF_@IHGBJJADBFH?GLFGA??CBAENA?PKMBUFB_@HMLCK?BCWENOB@?GETZO?NM?CK?CCKOUOR@HGHM?EE?UICNKM?OHGBM?LPNWONEC?GGKF_@E?PH@?G?KUCHIE@?AN[CCDHKFFXK@Y?GAEEGC?F?[\F??@CMHANOOFBD@]?DGAFBJ@DD?FMIGDECKGCVJEFPA??K@O?@DB\@NM?N?UK^HEMDBB?XA?DCAHMG[A\@EFDA??\QEDKDQQEEEEEEEEEEEDA?IFAAFGBKG???MFE@ACPAMO?BL??CJ??FEH?AP?DKLABNFCDNH@OC@@AUNA@?NBFK?BAA[B?WO_@FHGROJHKF@F?MB?FHBHA?NN?\@FU??E?C??DK?YH@\CBEBMKIDAC??IF??F@UHQUHFCEH?@DMCF??BP@CH@CHI@BNBIN@Y?_@D?C?DJBCDOAE@AFFFO?K]WYKF?_@KE[[\CEGFFCCHB@A?E?JCHCJ@IAB??NF??D?OL??E?B?BEIKHDDFOLRHAUUMHOBKCK?HD?@?EDE\O@?G[ANMBKHHCHCH]?WGKOOC@@CADB?GDBCFF@KBDOD@IBX@@_@CKSNDKAHDXUOANMCBM?FB@K?JLDCK?HKANBCJ?Tz@Jg@c@x@`Aa@e@y@`@a@h@f@o@u@k@Ae@m@e@y@a@h@gA`@?s@i@r@q@c@w@c@x@`A^o@nAoAACNNCODAWCRCK@??UHGNK?HNMGHDNOFRM@JFG@XOGA@FB?AQBFXKN@HNH?CD@M?JB?NBAFACBCKDPKHIF?O]JDJDANNROG@BBN@K?EHC??FBBRKMNFCJ?DNNDQ?FAUBGK_@XD?J?MHHP@HECBGHJFKBA?H\A?MF?A?BGPCDB?BDAOHSK@@M?JEFGN?IUBKUHDNFC@?G?EATZCMOAO??AJARA?]@HF[B@DNGBKCCO?B?A?@D?@FEI[\G@HAKC??CVHFG?WCFDE?GAE@AKGCI?U?LMCKHCJ?JHEDAK@AB?GJYHDNCF[DOHH?Q?G[?BMAKCCBDKEUFB?E]LB@FF@GN@B??G?JGCMAC?]?@?EFKA@LCEEJ?CVBCIFKKO?BIC?JNKOCEC?SDA@ICHNBON?NJHH[?OA?GJAR@FBBAHBG\IFEBGFFU??BFOFHHHE?BDL@B?QFEEJ?EBDLBOMFBEAQOE@@A@NMHEJ?B@J??@EGW@@GC?JP?JGJDLR?M@?NKCDHOJDHD?OCGN?CCR??DGGXB?B?\BCVCKJCN@GLAOBA?A?J?EOUCGSGGA_@HFAJMG?VAANOUKHIHAF?AMOGEDXIN?A?FAD?GC?D?C@QQEEDQEEEEEEEEDEEEE??L?UFGD?JHAN?@@KGKOBYQXS]FOAHGAACGDKGKUE@FAO??TJFA@AANEBO@CNPQ@CF?RO?H?@DN?E?MSQ?CO?CB@OK@AHMACD\IC@KS?SHOCJ?OD?KSBF?G?G?M?O?KNAI?N@?IBFBCBC??MIC@NN@?]LJECZOAJBED?@FGEDJ?@@GEAEENTPI@?F\AFHHCCOOB??FBFFIHO@@HKOBG???OBMI?@DQL^CALB?F?MJJOCK?G?M?FHO??DCEZINVDJ?BXGF?EGECSNJBMMJ@UECFEMF?@IHGWAG_@BJOLD@HC?CAAKBBNAH[HONJKC??\JADDPHHBJIE??NDANHCADDDA?@[@?J?NPFA?@MPGFO@?BKNONFF??RDDHAGD?O\XOGK??GKF@?C^DNC?KGABFRH??SEH?FUFYXIBNENEO?DEN?G?BHVBMQNCM@?@LGFICF?K??CUHEJCG?EED@?Q_@NJRO@CMOCDPC??G?MEND??SN?@MO@?AI?UOM@ABCDG??OLNH?P@?AW@GFCDKH@A?CMEMHEB??D@@ZCK?DLANM@BWDA?Gz@\N@BHa@c@|@b@w@|@b@c@w@`@GcAw@`@cAr@h@b@w@`@cAr@h@x@c@q@`@cAr@h@x@i@a@b@w@`@`@a@c@w@`@nADC?@A?GB[?HK??@NNNXGO@B@X?S@H@?@?GCEFJ?B?NA?SFAYM?UB?K@F???ELBOCKAMMBI]@HDTDU???OGG@HA@OMKHDJDMT?GFIGGCA?BOPDH?AA?K?DBPJ?GOCN?NBHI?DUCAGDAGX??EJ?QGLFRJDGKFB?@AMCMO?JUCKC??CLFMEVFHA@@TN?G?BHH@J@O??PG@J?@?KKV@GBWJKK?D?MFM???O]?@J@@ME@?C?K\JBMBYAOJU?KLORCHDMDO?NK@DFAEFKJ?]??G@?GTAO@?MHF\?B@HJRN?CHORE?K?KN@SAEABOSJ@?CJC?DE@?FECHTQLLCGCG?NCHBKKJ?EKFAADDFYFKD?DOSBFB\DHOODEFCBCBECE?DT?BC?DGCKDK]KK?LFDCEEJLNHDF@DORDOWUBABBEDHMJOQQQ?DEDQEEEEEEEEDEEEG?PH?N?A???JD?EMNFKNSK\WYJEF?BHU@CFJMAGDURKPDK@CG???@MBM?JKH]C]H?HDBPEB@?KAABUN??CFFLCZGAGMNDHGKE???^V?H?ANRE?LO?KHDCEHA\D?C@MEAOLC@GOD@QLJVBCHJHAJHH?BH@B@MCHVATCUNDC?RH@OAFJ?CG@?M]A?TCDMG@@KK?J?DFDC]?BUNJPHWAI@AJGF?GEO?HFUFBMHZ????CLHCC?Q?MQE?@N?KBG?GNDCJ@M@DXIGF\ABJB@IOFFHJ_@GHC??JCBHWFHP?E_@@BNOC\HEU\A?BFNM?LFNFBNAMQ?HMDNH@CP?YABOBAJRGDKO?HJBEAN?MNGCPKGDIEK?LJGKKMAGKF?GB???@FOOARZCLD?O?EJDDREHGGKCMNHJAG@[ANBDCPG@DK?OOQJJAJE@O@?HaBLF?GVOJAOAMEAGA?FVBB?BBVUDFDDNBC[HBOLH?GNN?K@NGRFG???KOMFILO?U?B??@E?OGKKDNG?KVEFPKEETABDQ@OMDBA@GOU@BCAECKPKYN?D@?JHSB@PA??E?GE?K??]NBKJ?M?G@]UGEEJSDB@C??KDSFA?NA?KANCNDA??LPFOCHP?N@E@GJ?BAH?ANNN?AB@R?KBLRP??C?CFFMC?@NFUC?BEMFND]\N??AP?DM?UACEMEFEAFC?MCTCNL?DERA@ONMT@JGF@AHNP@@NB@KABE?OB\@CPDOA\DMIJG@B@@?NEJAC?z@H^o@i@{@bBs@bBs@TgA~@`@j@h@`@h@a@y@b@e@a@e@`AcAm@x@c@k@q@x@c@k@q@g@dAr@o@i@{@bBs@k@q@g@dAr@BK@J?G@??BDDAJS?KJWHAL@BRABHG?GCCFOFBG@BG?\QFFOEJ?EDE?JRE@I?OGGKG\??KB?BHNIGAK?@HUV@YCMHHKCAOWOBMCFCJ?AAFB??AHBJOP?]AOXGMHHFBB@CCSA??CFEMCRCHTCK?MECEXO@B?K@H?DHEFD?TECMMZ@JDDFHBBP@HHHEB?B@KIJGDCDF@_@DI??KJ?ACAIDJG]HAEKBA?ARNBKG@?PBB@?BMQHA?IFHHEFFDGGI?AKC?JOQQHEDQEEEEEEEEEEEEE??O@NE@BA?NGG@@AEBPKQ@[SQEBHKMAD?C@KCNBATLSJPNRCJBEBC?FNHB@JEK@REDIVBKNFMHMNABKM?REA?PL?AED?AABE?@BGFF\FN?TLT?AB@G?A?NFHD???LRPYM???KKCBAH?C?IFGBOPBCMK_@EHHEHI?HDOGGLD?FHDPGNOWBCAGN?CHWA@???F@OGDM?OMFYAB\BE?J?@QF?A@BJAOADDLKNDF]BK?F_@QC_@@FLDCGAG?E?GF??NAHQ?@LEOGBKDCSQD@ADCC@GFAD?THOC?G[CKCBTLB?@?S?DDGNFCFBN@?[IVKMKZ?ADHMAKAAJTHGBFAN?MBJG[LTG@EGRDGEKYNMANIFKJ@FEH?ZFD@DWU??E?AQBC@A@UVAK??H?N??NSLSDO?@B?THFKA@OX@EBEBBFODAGUEDXAILACK?FG?I?L?JMD@?EE[?GCKKLBJDH?M?O@EGGNWY@C]CJJGNEP@BN?NZG?H?BOAAFPLSAA@GHY@AH@?@H?NR?EM?BMQFA?K?JHHKLOA@D@@DDIVW@??FHBAA?CH_@GNHFWF@BPKDOHFI?@O?B?GD?F@N?M@IFOEYEOB^^I?BH?EHECCA_@?B[HRAL_@UFKFMU@PWEACKNF??OPGOCFCE?R@N@MNMIF?HGCM@T?DA@ZBKH@CAYDA@AAMFD?DMXIKEYFH?K@F?FDPGFJMDAHGTH?E?ANB?VBNOCMOvA[CG?DQLA@HFCONO?FOTBAC?A?GOG@VC@HPDLAMM?KIH?B??CNRMKGD?BOFRIVIG@E@GMNFGKECSUDG@KFMJARD?KBGIN???GB@NISQD?CFGM@O?KMTDBTEMHG??DGHL?@KU[?DUG?GCOYAE?G_@G[AAGNCHF@IBUZMAN??EDOX_@]NAFO??KBF?@L_@BHHz@H^e@m@y@`@a@`@{@g@Om@y@~@pAc@q@x@a@`@{@g@n@b@|@r@c@w@m@y@`@a@`@{@@g@y@`@a@`@{@g@n@b@jAf@g@n@b@jAf@e@p@a@b@jAf@g@^`BLB?@ICNCECFBII??FE?HCBD?HC?K?BX?DCF[\HNGFRFF@MMFHFMO?UQMHFAP?MOBANMC]NOKHDHJ?@LTNNHB[GCGFCJA?DEPAN?EHY?MG?AC??NSFF?ANACDQQ?EDQEEEEEEEEEEEEEGOCA??BM?CME@@A?KJMWXX]L?HBJB@OKGBN?AB?IKHP]GD_@TFHK@CHCNC?JGNGYYAOG?YMGJHE?FMHFBSB@RBPFGHHFMC?@D?JBIEAC?ETJPICAAHEA?MK?J?UJTOBD]RAIHA??GCFDKADHOCAU[L?@?O?KFBHSH?TBC@ODJD?ID@FB?BJIBJCCB]O?@CIH?@ADNPHEHEE?_@E?HAMPLSPCEDGHKO]CB?HONX?E@JYOKDLA@D@E?@?CUA?YC?DJ?aBBIBIDGL?HRE@?CGC?AK?@@U?PMJCIKFT?U?G[??MOQEDHJDDKAHIKDJFYED?CSFQ@NJAD@E\GME?@CCGJLRPHL?MNNHJN?CLSG?N?DDHCIDKCPAFEEAOJN?F?ESMFBGO?CYIOATEA@?BCLDBB?O?CO_@HTMKDNYIJGEC@AKWYHHE??MC?CCAT@EKB?ALOL@UEKHA?VFC_@GM@CAK@@P?J@M@WQJHDTNAUG@OEC?]CGJGHAAJBKD?QYKKBH?BTLS@@NABBBM???FFAO@PLTQ@L?JNANHD??N?AGCGGBRPDOOLPBHGD?C@KEO?HOF@KA?VZAMN?AW@@C_@?GBEFBJH?EVVO?NMGEFMNHQL?MGBCNAFDOKG[FAJTMAJGC?TMMFOLOCJ?JA?C@OCOJWCKDWAKPLJAAJ??KHHDHBHDVAEJI]LAIMDG@KEDNANBCO?SJGOM?LBB@MO?WH@K?A?KKDLUKH?NQAA?IUYCHABB?ZJCJ?EGFC@FR\ILMFBMF?GCFID[?A@GOADXEUDCFBPG?OGBCAA?JMPCDHBYHHMIK?XO@M?O?]@?B?GJGK[FEHCT@GJLJMDH?YFGM@DAF_@BG@JNNHQPIRU?CFMDCY?F@AU\UOK?M?L?GHBZ?AG@DCC@NHDANZIW?EKEAJJIMCK?AKELO@CBHIFDNJINOO?F?KFC??]H?WBNHFDL?LOGCEBBFRMUG@OGEN@\JQDW?ODGOBz@^BCHBh@o@x@a@f@c@w@iA|@k@}@f@c@w@e@bBk@e@`@h@o@x@a@dA`A`@a@f@Cc@w@e@`@h@o@x@bBk@e@`@h@o@x@a@f@c@w@e@`@h@o@x@a@f@a@e@`@h@o@x@a@f@`BnAoAD[@EO?ABOFILSGA@VCDJ?HNJCKCS_@CF@@@RMAEMG?SKODkCKKK@?@?IZI??MZIQQDQEEEDEEEEEEEEEEE?O?B?AJC?F?BBHBOFS?MDIWGCLBE@C?MD??@?HEJX?JPY@@EDNCDH?RP@A@?CMNQR?MBEBH?HMTH@CMT?MBF?SG??JAPOAE?CBLUGAB@DLNAK?_@OHDGV?E???JOVK?]\F?FBENGMF?OMO?BIJ@SE[JECCAJPBAJ??O?FKYCHFGX[G?M?]EB?BFONCCDCY?BB?KTDL?BA@Q@?FG?E?@SODKCND??OY@KEHC?JI@LKJAEK??KBFNMFORFCYD?GFALBOG?M[AKDABHDCIJMBZBA?CMUCFO?@KDLC\E?EOHWFM_@?A??CFJFWAOZ]HGKNMCmCLD??@BGT?EMGAKISQGHG??DCANCK?AIJDBZHE?CIT?C?JD??H@DGJ?P@KWAOB?QG@MDL@@@KDG?C\OGBDJ??ATKJDDAMRO?DMVCCJ?B?Q?BENDOFBGOLHF?IZJ@HDFMDLH?PMA?DONBMEZH[DCAFEB???FAQ?BM?AKYC?AGMGLD??QFHDADHJO?TAFOU[F_@?BKDNIKN?MMUAIBFFJFAI?GOCCBT@FCGCLCJREFKODEBB_@FCDP@HJNT??GAOLLHAAG?NTJBFAU?P??JGEJFHQ?OGM@FLECGBPABE?XMGCJD?HWF@?BO?A]?FC?DN?T@BB?ALH?F?CH\NEEGDGGBIL?SCNBH?@B@I@TZJ?K@OCCJ?B\HAO@K@N?EAWE]@J?AOBGAI?H?FAU?DUOL@LA?CAG?CO]HAKOHLHDCBGQNRPF@GM@BDGBHA?MROO@JSEOGDTAFSCYJ@HOOGOK?NJLE?MADHLAA@?OIB@U?GIBOGD_@?FDA\E?KQ?EHHMEN\?PI?KCFEDA??@NICHOOBT?AKYA?ECDBHDLDBGFK?A?LN?MJAIO@BBBQDRPHADBB_@G@@??ZCEHC@H?AOTKDRB@HKBNY_F@C@BDFEHALCKEYT?KM@FIBKM?@?DA?EH\BTCKPDG?NJA@GAG@NNKXRPNYDDM?R?MKE?J@JKUBA@AQEHYWYJDIGFJGAEBNO?MN?S@N?GICHN?DD]@z@AgQF|@c@a@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@}@i@m@`@h@u@b@w@y@i@m@`@h@u@b@f@n@j@g@b@f@n@j@e@s@c@k@}@i@m@`@h@u@C?BC?IQQUEDQEEEEEEEEDEEEEF?D?B?DOU?AMGJ?SGDCLS@HE?F@AAJMEMBJGBZBMIPW?C@PH@DCUCBF@?JF?DJSAALHIZIFF??FBD???AAC\H???XRGA?[@?KCGGDEOBK??GRRBJIC?ACBGKBECAFTGGFNSFJ[EB]GCFCK@E@BA?K@SPCNFB@HZOAEKBDCAB@PTZEL?N?CEHHB?L?\C?AC?COVQCJDFJJ?DKHLOMJFC?R?G\WHD?HMH@ODGGCC?C[DCORHHW@JFOAW@H?G?JCC\?B@LNBF?@NULRD?@OB@H?G\?R?KCKNUU?DKJZJGNBEIH?_@ELJG@D`FOI?CBCNANFR??E_@APJK?AB?R?A?@A@ERBCGN_@OTNNJGGXAE?AK?GLNOCAOBLDBK?DGFFIAEK\G?GUA@BQHACEJBCFUKFTEP??RJ@K?I?AGB?GEBAUJRWSQEOCMAB?BHK?H@LDAOHI@?T?FK@OWPWE???A@OAC\_@?KHIC?_@H?@EYFGNKH@BEBNS@M@O\BEBGGPKF@JGHBA\JDNKABG@QFGD?ICD@ENHIEDKD@HAETGLJB@EHO?AKIYEUA??S??MHJSHBCEO_@?@GMO\A?\?CAHE@BAG]FMFK?H?KRAO`FRA@LNMOGDCLKR?C?FADE@BIHVKDL?CODGAXHFJMOJDKJK\KJ?GOQA@HKBGSBCB@CKFVAC@AGBSHH?DAF@?QBFD?IAFUDCPJP?MDAPGDA@KJ@YK?_@AAAGDT?NH?@?ZDBDC@SAH???@E?YIVNKB?EDEDZKMG?]UGUHFGR@FC?GHAOO?CT?GB@AP@NAEIMNC?E?GDJCNLNKEESEF?_@RGLNAGFDHB@PDJCKVCBHHCNL?AJNOBCFA@V?CYRFEF?OOR?GEBOUNEAFASDALSQBGKMJBOM?H?@OQOUPCDAMAR@?XHJDADMBJPM?@VOBACOO@SDHBHNCOED?S?CIDESH?HLUGFBGFGDM?@G?UYHTVLBDBANDRCFOE?E@J@?BRMIF?EDFJJDGIF@??OBCDLDK?TACMF@OJ?FPJD[BB?@J?C@CYC?AMICCFBFDI?KD?@AD@UCPG@G??NPQQMEEQEEEEEEEEEEEEE?NBMHMCO?MFF?VNEH?ST?ABLMBFHA?C@DFBJBDCBIPz@_Bc@a@o@p@`@w@y@pA`A~@n@j@g@b@f@`A~@c@w@y@i@m@gA`@w@y@i@m@`@h@u@b@f@n@gAj@g@b@f@n@j@g@b@f@n@j@g@b@f@n@gAj@g@b@f@n@j@g@b@f@N?PMPCDFUDMFO@K?JKM@ZBFZHB?Z?NAHMMKPHE??HFRJQLDGNA_@?AJ?C\BBDM?JASO?L@OG?OAMGGCK?RM?CLK?JA?_@PB@FWAAAH@ASNA?\_@NJIF@?ONSGEN@JBMCPF?CAD\DGAMB?IFSNA@CFFQH@JO@JDVLKCM?IOO?FHM[MKA_@?BBCYYEMSCCNNOF?HAA?BYHK?SRP?@MBBMHGD@GDOKRF?HIMA]EDU@^KG[@HDEFOBTDX@CNBROCMB?[ACHF?MW?FRWYBNAKHGF?GIDNAMBFI???CWGCBG@OD?B@\?OGDLGOBE?P@FGv@?HGZ??J[GOP_@KHFX??JMK??@F[@A?MIOG?ACA\@MA?D??GKH@MCI\M@?F?Z?M@SFCCH?MFAUZ\FA?F?MBKJIIDK@ADNB?AT?K@AFJN?OLZFL@HGCF?ABIGHJK?CAHBLBJMLUBABB?BGXCUC@EGPC@MFOYB@OJLO?CFORBMJA\YPB@F??NHYK@DC?FKAI?MUXUCmCM@K?MR?@L??FE\DGA?C]JCD?JC?LFKHZDJ??QLEJB?HDE@EFLFE@OG?A[QJGHACGKAH?PIEGEEBCCI_@@WOJC@GJF?FLGOE?T?CHZ?CCCDNOF???APB@M@BIA[HKF?NCJAD??QCOOBFC\AB[OKB?DOEDKIOQGHC?E?R@MEOEJNHFD@PNRPEJHO?NGIOKCNH?@BDH@XZNENJ???L?AJUJSAJBGA]D?RJDC?HQAACHUBLGMAv@M?QFF?HMKERBCAAJDYM?BJJMJQBDHOFCIGEB@E@TB@GGAJFRPCFDDPAEGHDDDKIH?BZFJFXMCFBGEROOGB@XNCB?@QGZ?O@NE?WAAA?DHDFQ?kC@?TF@O@UAS?ENHCMYMEAUH?OLAEI@THGK?JCJARHC?AM?]@@EWCAE??MB@BGSQ?CKR?CGKO?TBBCBEGAECRBKICIJ?C?FCZGOCAHON?INNDLGFF?DGKQAD@E?UGDLFH?P@JCGA_@HAK?S?KGO@Y?GD\QQHEDQEEEEEEEEDEEEED?B?GF?J?FHBHAVIFPVMN?]K?GJ?HMFKF?EFALS?F??@?BYB@OO@FG@HCORRPGAJGQ??KQKABD??ABFJ?IAMUBPGFBK?SCEMEFBABGT@OKLAKBO@]OAFNUH?OSF@?NDIN@OGGG@LTJBNA@BC]?DS?UCJONDEG@BP]NMFFINC?KDDOOG?FKK[BM?YBANVEABGz@|AG|@c@a@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@}@i@m@`@h@u@b@w@y@i@m@`@h@y@i@m@`@h@u@b@f@n@j@g@|@c@a@b@f@n@j@g@b@f@aF`B?KCJJ[H?AJVDE?PI?CMJGAD??JLEKCFER@ECREAACJNF?JMFCQGFKGRMBP?BNBAADAGAAHI?EMYVL@ANFC?NKNHDJW?VOLAD??LBABD@M@FJHHBNQJ?QUE?P_@HD???CDFGKXDAIICFMIDBK?HABBU@O?H@L[\HOPV?O??GHADNK?HAH@@IAHLLUR?GHE@@OF?JAUUEC[DPA??HPBAFNOZ@KJG?CAFQGA?LGVABACGFV@MFAUJMFF?I?PUKBUEOIHKFLD???D?MLCBC]CBG@@DVAJC?EEBGAGLAALAT@CGHINCOFFBAO@KMCPF??\AFEFAQBKGCHVMHOEAXGHINA?O?KW?BH?DLFJG?MZMCAHKO?H?]MBUNETN@GCO@]GCFO?OKHL??_@OMH?\H@@XGJC]DHON?TH?HH@EIV??BKGBEZB?KCN]\IDDUFLF?NBO@?Y?BKFE@IAETGHRD?FCBHUO?CJOXAFFLO?ZNNJBJ?@]JB?GCBCSK?JDLDJH@C@?BCEQGA?D?\?GETGFE??O@UEHQI@ACESQUB@H?UCEFBBJACR[\HKL@CHJFEBCNKLSQB?HF@L?GBRDN?JOM@?OQ?ODD?RJDTAMGGJBMHFD]KBFAGSBMF]C?DNGHBODCBFAZHAC]K@FCIKAHH\JDCCMDYACM?SQ?DUMCCKHIHKCAD]L?EG_@JLDNKG??BVXIBHCEMOPHKDR?_@@HHH@A@J[A[?AL@?FLOMA?MEFCN?]U?PMBEJHBPKAKMGFHFAEK?K?LG[GB@LJB?@A?XJBCBBHNTKCDKXB@@O@?EFPKCDJHF??ZGBT@GDGHCEGCL@GBBMHC?IA@\ADOFHAYGDFL?OON??BM[ABB@?LK?N?CIQQDEEEQEEDEEDEEEEED????F?JDH?ECZBIL@?J@BEB?]GEKNB@MCHXI?CDBAB@@LBF?OAC?M?FCYC[HBHMJ?I@?U@D??FBLDFNA]ADUKOSBJF?E?HFXKEKX?LUAKFELE?D?B??B\K@??JPDOGK@SEFCEAFHA?GRHODIA?GKKVLTGFG?HKUBCDIDSO_@CFBJSKZKFGJ?EHGGC\AGJMACSOD@I?B?LN????[?N@MD[AOEHPFU@@IJF@CEIASB??DHCBLJ??^?[D]?OA?L?F?HHGPJAHF?DH@]GLJGDPAAHB?N@ZMFOFCE\?IV?EM?NCBM??MTADJAE?PKPNDOD?A?EBDDG@IJ@BCDz@I^|@c@a@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@}@i@m@`@h@u@b@w@y@i@m@`@h@u@b@f@n@j@g@b@Lf@`@h@u@|@c@a@b@f@n@j@g@@b@f@n@?DB?EG?XB@C\H?UM?AWFKDJAOCOGLEK?GR_@ABGQCGB?J[KHGEDLKG@IACCMZG@AFO?IAKCHRC@CPPWGK@CN??N??@WJACE\HMBIMGM?BBECA?MCTF?IBMOE\BJ@EAHFBMARA@?KTL@TDDCHFG_@EFA@GZ?MCICPBGOBAD?KANAFSG?C[??A]CH@@BAM?N?MCWNA_@]J@v@HWOGMK?M??C\ERCP?FENAJMLUMBCN?FGH@ICLJ?@ACE]D@?FCCIK?G?HTSCBE?KGA?OFX??\?NN?@C?ZJA@E?NA@PHDFGNV@OKNSDMGDCAFBDW?HCU?Il@A?DHNQL?OGDB@?RGA@BN]LS?NFMCSAGF?@?RCEU@JCZ?HPKGBV?ABOJJEHNSDUOBXJ\IG@MG?GC?CCKEV?A?ELMXB?GA?N?A?DCDAKPJEEIJF[@ED?GDHNCMNCO?IARN?WAJ@F@G?O?CIB?U?KJ[?TCE@@HEA?GF@E@LMJZ?GCFTFN?U?HAK?DL]?CADBL@CAK?HDH@@BA?IAJ?TBEJTUNOHCDFBA?SMHJHIJD?@??V?GLB@C?AWNJACE\?G?MBGCWTAMGCGRGDFH@J\KBBENGIKQ?HBOWACO?ACPJNHAD?OP?KMCQ??AAAFNLT?EAFGYJ???DIGC@AG@AGDRWNHEWCKCHKMK]?@GC??B@VYPHB?FJ?CE[ABKUPLTB?E??SEG@?AH?BIVA@@VAMD_@OUQQQAEEQEEEEEEEEEEEEE?@BFEA?DCN??AQG\L?JFDFDRAD?MOEAUECD\WDHAJJDB?TKOHGNJ_@BJMZPOIJ?BMHWHHFEDLHG@?BHNYE]CFCAESLTHHAHOBF?DOJSU]S?QDB?[??FE@EDMFC?HFQBY@?@MT?GBB?BCFMAAFLMMQFAOPM@_@F?J??DBFIE?T??J?LFOHME?OIHAVMFJN@\MNGL?@H@CBO@EKQVA@AJWYHA_@FBFCFG@?EK?QRPN?@LJFA?EALCD?EKF@EXAMFL]F?E@?GBLJBDHN?ZKD?JBCLG@@HA[GG??H?OHNA\MH@SBHFHHE?M\JH?H??YBO@GDSQ@EED?MGSAG?K?HQLMNO?]A?UC?G?\BH@FAGSFXHM@O]J?O@E@JDTODMAZFP]ELBAMCOON@HDATG@WJJFFLBHKDE?D?ENJ?HW??DPC?PDBADEOC?BFESJG@Z_@NNFSH?G???@N@T?SQGGFCHCGYN?z@DHkAC|@`@a@o@p@`@w@y@pA`A~@n@j@g@b@f@`A~@c@w@y@i@m@gA`@w@y@i@m@`@h@u@b@f@n@gAj@g@Hb@f@n@j@g@b@f@n@j@g@b@f@n@gAj@g@b@f@n@j@g@b@f@n@j@?AMWEHQKMG_@?HLFJOHGNOF?ASFJ@AV?OGERC?ON?@?OUGCNCW?VAJBCAIO@AERJO?@BCSFBVG@FEAZGD??ELKB?BBAKSO??GJBBZC?AETZCUAMNAMUSUDHDZM?SF?OGICHKDC?JIIVENMC@S??CMY?GUE@DFFDRMIGD?CWZAN@?O?BAA?NTCMOUYBNNM\CBG@M??HMKB[N?GL@FG?Z@J?ANDHHKA[ETAHRMFZKO@E?GOE@KCH?MRIVGHCAS@OIBKUEBEJBUNFKYMAKYE??CLFBKJFK?GNCV?BPB@JOHFELBAOH?WYFJH@YGJOK?D?C?ALOEC@?VGNDLAG?HGGGABIND?GNBRWYAE?FGDCNMLWHNJ??HAJ@IC?R??C?BCBPDOHG?CMJ@QABCJ[N@AH@CDLGA@CO?@?CCLAT??AB_@EBIVDO?DHHCGFB[CNIRPGJDAHV?J??KGKGLTGCBA\?A?MNOVFEACFEB]XD?NAJ?@HFBC\OEAEFN]KSQBJBJAOGFG]AFOMFDBKGZNL?AJNGUCEHV?DF???H?]NV@OEH@NMNNTDCCTACE?KM]HGN@E?GEH?BSGFALBOCZOKKPTQFEDQEEEEEEEEEEEEEAHHCMOKD?OCSIQV?F?O@G@CN?LKF?G?OU@@?YSD@DH?IFECFG?OHOKDDIXIHJ??CZHES_@H?B?HCJNUMI?CC[H?GIA?B??BA?CDF?IIVMCCLCPGKMDD?@H?DCDNBWBJMPJH\BDA?MFCEO?@?I?B?BQUGQ?A@P?AE_@DGO?B@O@YIGBN[@DOD?J?GH?DAHBHYZIFAIF??TKK@CK?BDF?J?HLAHCPMV?FBDE?E???AH@XVLC??JEOYBHD?A?A?JLDKAZAGF?CGYJD?IFNGA@]?F?[GG?F@MGBE]KL?B?CTHAG??J?OEGCG[MIMNUGOMMID@J?BUCHC\KHLAF@?ABNPINBHOMGH@GRL??CDE@?@BP[B?CDUGFBS@HFBGMCJDYJHVG?DJNAI?C?FF@JB?XCDVKCCD@\KNGDKNBBT???QHY?OUN[DKDFFNCGFJIHAK[GMJNB[?ECKFGATKFCMIGCCD?DQG@H[OGNKICACCFP?NFAI@AHFVFFJG?F\NHHENKN\BG@E?\ICKFFB[?B??@FVE?G?LHBHIH?HGLCD@NVKEFBENYFKEIV@GEJG@MSCz@kAHKAF|@`@a@o@p@`@w@y@pA`A~@n@j@g@b@f@`A~@c@w@y@i@m@gA`@w@y@i@m@`@h@u@b@f@n@gAj@g@b@f@n@j@g@b@f@n@j@g@b@f@n@gAj@g@b@f@n@j@g@b@f@n@j@NnAoAWH?D?HQGOB?BFEPA@CBMPDFN?@HMN]BNKDDEJ]CUCX@D?AZNFDBECK?JTOAG??_@QMEOLGHBOFGN?IAJSGAHVLAA??A@J@@OEGPHANW??KHYG@ECJHF_@HANAB[WB?B?ETBADC]DAM?FB@L??[\@MOFJKR?CHBHJBBC?Z?XJFBCUHWKDDNG?BYDM@[JXJD_@F?JLH?FC?BBG[H?NIFBBECDFBPENLGTO@AHPKG@A?BD@BHLNCIFOAAUC]HOEBF?NAYHJLM?PHB?JLH@FMUB?CGTBCCI?KNOMQ?GBJCK??HA\D_@AIEG@AB[\OKACMF@?ORAAI??C@L?H]COAD?EFBF?SCOKCDPAAOQKDEEK?L?@ICHAKEBEPFDA?FAF?X?BPMK@BBZKMP?C@DDO?U?DQGD??RHFAJLABD@\?@F@NWCHCFIVDADA?HK\@DCFB?IMNCFDSBU?G???XIC?A?\@OG?JPNQ?DQQEEDEEEEEDEEEE?_@CH@JUJFBJR?GXHTKBCO@AQ@DHK@N??GAILHOFEE?AOWG?DC@?MKMHWIC?VA?GBSWKD?MK?@?NBCFNA[??@WZI[BCFKDDK?KMJ?NFI?@CFWFFSBKC_@??NNHBMPJJO]G\JCNA???AO@FEEXKH@DQC?IA?KP?MHDCOEAFM??RLKH?\EHBGK_@NM?@?E@GWJE]BSALBHCHJODFJ?FM?GFARAVBPCFCFN?JO_@?AHCH?WC\HEKL?BKB@A[??G@BOESELCD@HXHCCAEQGHCJDAGINORM?AAHNMARKHABMFNNHP]?MNN@G?OK?DRCJGN??XFGPUCGO?HC[SABHAKCMC?]C@CFC@?@K?KT]LAABO?AQAUBVE?HNCNHDWK@H?L??[DMKKH@FKN?EBQ?BG?LMIFMJLNAGDEACD?O@DNPBIDT@BBA?GD?AHB@@ACLLTK\?TFABDDEF?@B@JFMBFSHMLSQ?GCCG@FOBN@KC@LDAG@IKR?AAR?NCF?EDKEBOFQJWMCKJ\KG?CM?GHAFDA?LPWG?NZ?XFA?BKKECGHOHBOSDCHQIVJFGKCEDG?JBGCIIVD_@HXFGGDFAEBKJDZNE??RA?CIEOCH?NK@KEAKQTCFH?TO?A?K?DO@M@DOJRYPRUTJ?HA?HN???HFM@?HGSS?S?AE@CWAAF@?HEz@DkAF|@c@a@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@}@i@m@`@h@u@b@w@y@i@m@`@h@u@Nb@f@n@j@g@b@f@n@j@e@s@c@k@}@i@m@`@h@y@i@m@`@h@u@MQLODKNFI?U?A_@K@NB?AEXPDHAHNCP?AH@??@AGB@JIXID?IFGALK@C?HA@EBDFMFPDK@T_@PKFA???UA@@@@@IZI@B@I@B@ONB?MNO]C???HLN@AKL?_@?MDGBA?BDPRE?\IHDFD@E?BJ??E?BWTZ?@LBCCB?G\?FUFODGGCDYOPFZGMFBPGUCKEKF@HC?QH?ICCC]M??R?G?DNHG?JEKTMNLAAMMRJFKNEF?GJAYJ???SKJ@VBDE?GB?@Z?MEEJ???WABGWYGBEDGFPED?FGCA?SB?H[@KJFMMGWBGOCRFHDIG@NSJA@HDA??SKBP??@M?FL?@BHJ??BKBHLB?CIOB?L?@BAHKZB@AKLH@GCR?B?PFHK?CTK@ANL?HMOQQ]EEEEEEEEELEEEEEEE?R?EFGCB??RIAVOODOGE?LSFEDBDDBEBEHKPNEHM[?MLI?A?OCBMCHGRO_@UHGFFPZPBGBFDDUHBD^F?D@HARAZVLSJBOHGGO?ADCBCHMPONY@LF?HAGODA?G@O@HFGVER@\KBHMCD?K???BGI@LDHMAY@G^J@?A[NA[@OBOMQN??[BK@KAAA?@@IF?HZLCTAA?J??COMAHFPOMKHIAPA@GG?@GS@J?I@FHULCCD@TDMZ@BAMBODUBXB@]LOE?H?TJKBO?KBN?RCB??PGU@??LUAGEA?@FZIB?MAEPIAJ??@??JHB??KTFHL?PMEO?GLO?GCMHA?JG?]?]KCECARUBFCG??@C?FE[JEQH@Yl@PEF?NJK?KO?J??NO[FNATKV?DBCHFHA?AHLCA?WNBJOIKCGD_@?O?MAQFABIK?CC@YEMN?@GODIJ?WBOPNAQAU?D?K@ENFCQHOG?L@_@@[DKA@OBEGAGDQJ?@K]AAMVBCFQMD?B??ALGTO?@GHI?F@EJVENA?FKMRFMEF@ALBAE?MC@W@BA@LCJBOKJADKQK??HI?O@M?RPFB?B?GOKAVAGD?LM?GKTBCBDCN?O?FFGIFJPG?J?LA@GN?B?@E@[\?HE]L@COG??DGA@EB@L[\BGC\BG?JEAUMAXIGEAK]DCEH\?MD@DFBFCDEQFJPVLGABKDNNDBOGKJJJIBMWYBMB\?HN?DG?HCGJHE@CIFTAHOASFDD?EO??COJCLH?PB?KLPCGNA?FJOCAJB@M]Fz@kAG|@c@a@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@Bn@j@g@b@dAe@s@c@k@}@i@m@`@h@u@b@w@y@i@m@`@h@u@b@f@n@j@g@b@f@n@j@e@s@c@k@}@i@m@`@h@u@b@f@n@j@nAoACRCPP?MDHBFH?CDADOKR?KWZH@GO@F@D?NUACGJOWKCLQL????JC???CJJRNCAPCGG]K??ME@OHGAWEE?@?X?MQ?J@@?MFNFECPOK\?G?QBBNGHANKJBB@WKEJTOKSFBLM@?ANNGDH?GAML?NAPNOOO]BC@OKDI_@CANAR?AA?KDQNE?DKG?CKJPA?L@NCJ?UVLJ@H?CKXDEE??_@RPH??CF\@GGCEFOCVHBM?[@KOHG?VM?CC@CDPWKFD?LB?CS@?D?EOMCBCFXBLFNEHAPEBBU?Q?D@JFO]JJLD?MFQQQWEEEEEEYEEEEEEEEEEODECBCRFHFFAZZHU@AGGU?HGJB?NUSPNHX@?AHJHCF?AK?C@FBSELPW?KBK@JVBCEFAHE?CHSR???G??FW?A@ES@@?H?FCYGMQLMUDCEFN@LB?@HG@FDZSMEJ?AHCGAJEZHABMM@DPVFEDJNCGAGARARGD?MKC?ELABENKNAD@SXIJB??BCLFALDE?ODM?GKYTAH??KHMEZE?CO?GFFKHZZI??COCGRDFBKEU?G?GPDFKSDKFCTOBCNMGCJ?VGL?FJVLJDFGABCCFC?MKGWIV@AIB]ADHDB?DAGG?BH@]?BE@R[\COBAEOH?M?@TMXIOK?E?VAJOEJGGGF@CQJ?I@?JFBT?MUKA@MKBTF?ZCS@VFBFHGNFF?CJ_@ELA?EPCV@K@BAY?MMNJAF?AKNS?NR]L??DC@MJB@?@GE?YE?]AI_@E@LG?HMMK??BHFBYGK@S@FFNI?E??FOJKDNYB@T?HB?ECTNY?MBJ?A?OCKH?IXKUJJYFM?B@M?G?M@ANALLTLADOLFCCOJJG_@_@H@COEILO@DJ?S@CH?D?CHNHGACB\P@WLA[CG?BNAAEB@GGAC?HTGQQLMABKG@MCEUJC??JRVL?CI?AV@@UJ@?NNDJNE?LATDMCFASN??NH@DCMOKKSD?QCCAFILFJAJEJCNCGAABXHF??BTXIDU@[?OECHK?NOLSHCAKDXGAMVNAGC@N?CHDTBR@?QLFGG?B@BJM@GOBKBRZIKLCAPUB?C@?DKA@GC??SB??ZGFLKMDBMHCF@N?P[\MGJJOPB?JN?FNF?DPHKA?GL?NMDIWY_@DFHCB@YD@ECWH?X??O@ALG?N?HDTZH?Cz@kA??|@c@a@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@}@i@m@`@h@u@b@w@y@i@m@`@h@u@b@f@n@j@g@b@f@n@j@e@s@Mc@Lk@}@i@Dm@`@h@u@b@f@n@j@g@@OFJICF?OEEATDABHOFCTFB?@DI@COAD?I?A?BJDUGQO??BMS?NJFAAPNB?H?ZGI?GFHJCSBH?G?FHVK?B@CSD@DG?GWYNCAHMMWME?FJTACMSMNBX?MDHBCPUN\FEU@FB[?J?LFECBMW?FHQACO??CD]AAG???GD@T?_@OTA@K@M?LCDEJ?A?HGVAM?MI??_@CODIV@JM?K@]GAO?@DPIMGJOPON??D?DGE\?EQQEEEEEEEIEEEEEEBQB@GFO?CCHILTUCCCOJOLIAM?A@F?BA@C@]MGO]?CGR\AMJJC?D?GALS?B@G@?CLTCA?D@HG?H?CQHBFDBCTTZQF?OGHC?_@DCP@A?KE?CWSLG?FOED?DGJAKKHA@QCLLSLHDO@FJ?AU??GMFUUl@L?XQ?F?NOMUD?N?GC@A?SM@RL]T@JFNAMAB?EC@CH@R@JBTLD@J@JKHCO?JEXOEJKCWLCTGKAMI@ABBFGIC@?ONINULCDJQ@MG?K?DJFCC?VMXE?ZC?AABHCGHCJ?PJDLEU?WAJNAI@@FNH?GH??SME@\IVJNJGFGJKK?DMJHYB@\@SAEKLK?MJ_@DJBAF?KWNOK\EG?BWCO@CKC?C@v@TH?\?AHA@VFGY?MFOK@KHEJGSSOHDX@@EB@?F?CK@FAB?ZLTKES@IGOF@GJ?H?JKBA?LHFB\CBWJHHA??@MDDF@I?VMC?YNAJEHDI@CKBJ@C@GSASBCL@]JMCEMJBAHCFA?AQXIDB?LB?N@KINC?@?C@CZEGIFOI]LODB?AKCBJGK[HCQGN?H@GEOHS?HHOCDCNLCBOL_@BFQ?F?@@NGLFHJFF]AE?HRBJCCHCJKGSHE?GFC@T@MSA?@GJ?EF@BREO@N?FLO?YP@FG@@CBH?XCEDMEFJRD?T@H?KECJH?JI@DKC@?CLGLJ?ACNKKIKCO[CCB?JBAVHBJDBC?Y@J?BG]DKJNFAIACDFD?HNKLECFI?C@CEFKYB??JHC?@[HDTEAN]GJBBTG_@ABKF?B@LCOG???LOB@LZI@CD@O@?WMHKJAWYKJDFHBLJ?FOFA?ZGOEAPUKAEBAOB@RKBE@_@?I?GIDKJGHFGJHCI?B?TB@HYKOAAUAF?CFZ?G\OUBOEBL?D?CH?NMC\BFN?FSBAAA[\C@@EHO@FTJOAGAOQz@GAkAE|@c@a@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@}@i@m@`@h@u@b@w@y@i@m@`@h@u@b@f@n@j@g@b@f@n@j@e@s@c@k@}@i@Bm@`@h@u@b@f@n@j@g@^IFGKG??KGLMEB?LOAKJB@FROGED@?QJCMDB@CICDJ@?LAE??MHM?I@?AOKQKBB?@FTA?CGG?BY?NOCDPIUJM?AL??FADAH_@IJBD?AVD?CN?W?@B@B]NG]BNOG\GFAMAMTB?U??SBKOGS?H@K?HCHMQCCQQCEDQEEEEEEEDEDDDD?E?BAG@GCDJZIVF@PGMMHAP?K?D@?FFF@FIEPAB@C??HZHB@@KB@H@TTZJNKAH@D\PFKH@?K?NCDIBB?HO@BLPIPN?DMB?BDFHVEB?BJMZ?IIBCDNC?FCGDHB?G?@TARSQSFNDJDFDNDHCA?GGEJZL@TJNG?BAH??JGBCHALBIAGTU??CABJ?JVMOGFF[Gv@AG?TA???A@?X?FGHGFPGF?DT@CRJJ?_@FSA?@BCGIVKCJ@CJQN?MOJF?V_@A@E@JLHNEUNM?YJ@@CFDLJ@AHR?NFUH@QC]D?JGCBSQB@?NDAAHACLKPE\?JNC?XA@?MNFFEA?EV@K\NGF?B@IPWJGNCHD?DL??CPOMNVE@YFO@MNB?JE?JWCBG@YC@BP_@OHJ?BFBBZ]MOFDOZEC?GOD@JFHNJKLLTCHOLO?KBJ@KLE??D?NGPGZEHDLN??@@KICHJ???BIE?I?N?E?FC?IBBO@KBTOG@?RDGG?N?I@VFDJAMQDNHJDIFTJJ?BOMYM?NM@MPIJAHNv@OPACBB]@@NUGBVJ[M?J@?KTZ??D?GDNCKJYJLAFOZC@@I@GCANNGA?CNY?N@H?IKJROCMGD?TEFAOYA@J?CHTN@B@BB@XDF@@KOX@??AYOHN?OBOB@NI?DFGLAJAPBG@B@@RHB??VADCF?BHBL?CFF@XCMHAB?L?UGMMGLJHNB@HBSDE_@@?TCHGJBIVCO??CNA?VFNKH]LBAADAJCYUMCCJLS?FAMDQNHGHBNN]LEGBCBHYB?BCS@GN??@ICHI@??DDBUIBJDBJGCC?X?IIEVH?CEDWKFCBCJH?J?TFC\BF?ABO@E?Q?GHJEFBZHPOCGzEeAeAeAeAeAeAeAoBIRAFAENMB?DJC?NAGAR@E?B@D??C@CCB@@J@FDAJOHG?FFGKBEGLHAEFG?JOBG]DHUNEBEH_@IDJUHE_@KGGA?@?BNHFEGBHHPEBZZ?ZI@CJ?QF?ID?KAO?JGIAOB?OGA?B@WYACBHDAMCBK@@?OCAMBHHHAO??BFDEBHAP?CQNJKH@FG@BHAFTCv@GEMJ?NFGAJLCQQIQQEQEEEEEDDQEDLEELEDEEEQ??@NMFFEAI@DOJ?BKCCKAOCAK@B?@@?N?MCHCQGBGWJCAJJJG?AHJAYPONQDKKECB@?UAAOGCCH?@DNMKABM?F@N?YIQVAIKAEBXEBB??CJASGCMFACAPDAABUFCMCRRP?FJN?V@AHKMNWJ?DNMDP??DMXAH?BFK@@GOMM?@HOOY?BBAO@VD?BMMB@?@DODRAGJ?ATIA?S?JNNFK@?@]FKEG_FJt@??IDEOFOKE?IV@_@z@kAK|@c@a@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@}@i@m@`@h@u@b@w@y@i@m@`@h@u@b@f@n@j@g@b@f@n@j@e@As@c@k@}@i@m@`@h@u@b@f@n@j@g@b@oA?CJ@E?ODRCt@EB?CIAG???RBA@BNGH?@DAXE?DOYPINKI?@OBHl@GCRAK?KCAB?Z@@K@OIB@ANHD@D?CD?GMCMC?GGBKLGQ?FNHOW?DAAJ@L?@BCG@CJ?BC?IHNFFFEHK?P?NFDGMDGVD?BFGWB@@MD??MBFGJK@?@G@?@XFP?[_@ODK\CNNHOFVHC@F?GFK?GJ??FHLSAGNME???NOE?N@HDM?@LB?LHE?BNMA?SHt@@KGAHCE@K@FNGYCCYAK?A?@KO@JFHPCK?@ACDPIMCCQ@FCLAEOJFC?DKD?KCCE?O?G?J?H@GJHOEG?@H?RMC@C?OTAYBCYB?RDEDN?CAFAKGNBAGC?CL?HOG?BNHMGAA@MKC?RCLHDC???N?SGHWBHO@KH?HGLHBBC_@JLT?FNX?AH?DMKHHON@GA?ECCG@?MXJAI??HD?GLFE@@KDDAA?H@AOE@C[???D?NHHMIBJG?M?T@CANGTCMT?N@C??D@XFAGJB@IOMMDF@NAGM?A@B@JAB?EBHD?B?HAPD@AORO?KDN?@NJO?YCIGCCCAC?DEMAY?POGL??D@NJFHCB?E?GFQDHM@HAEBK@DMMGH??IMEBLLB?BICF?GJ?BY@BFO?OEE@HGDMMSGPCCMA?JKD@LJMC?@K@MAMDJFFGWCFGBCFIHAKH?VAOJED@HBXMHO?J?@BJFBOECDBQCENH??MY?A?HNv@AMMKWv@?JT?M?@?TE?KE?H?LQTFQQQQEEEDKDQELDEDLEEEEED???JFB@?HDM?@HNODAOF@ANICBMGVBDCBBHDCZEYPEC?HN?ADHPFFHOHJKOJKB?A?@VYNN?ADQRKAD?A?M?J?@MK?FCBD?RMKB?BID@??CTMACI@HWYI??AA?[MFC?Jv@KABAB???OCDCKCJJGVGUHNNLQCTLLS?D?NNJDH@WBJ?CAM?LMCFJOGJJDR?CBFBDB@MHLKJLIQBR??FJC??HABM?C[DNEODJE?NH??@OX@AZD@@Z?J?MASGNAGO?@HRDN?BOLMBONBDAGAKJIL?T?E?EFD????CIA?GGI@BQAIGEKKNOJ?L?MCPCSFF@B?FJDDSBONGG@FG?HFAF@CMDBl@FA[JOCBQA?Ql@B@V?H?HM?I?L??GCJJCQF?@EFEB?I?@PKAUH@MO?BEGOCFDK?DPGCOCD@CAGTRPNO@Ev@AEFVFXGIHF\A?JFE?@EH?AJFZ@KKNOICEAANCCBB?B@?CFTB@NII?GAGED@??H?COAWJ@NFD@BJCBE@BLWDY@NBQECESQ?B?KDOBCTKANIGX@?MGKLl@H?FGMD?CM@A?JH?GADGIE??OBDJV@KMD]G?H\I?KJX?BH??PF??HC]t@JLKJECCUNGGCO?DCG@QHBl@MTBPMHBOAEF@FDJ?KCB[?IC?MKOA??NK?NDMA??ELCGGXONCAH?CACKPHLCAGE?LE?OGEJ?HAl@B@QII?C?@KAQA??FUAl@DAM@AGAKYGC?MvA@GGDHA@H_@HLFE?CETCIHI@HHNADBZE@CF?BPOFK@?O?AHHMI@]MHKC???ILEAJ?JKN?AKI@B?JA@?LNDHBFCB@G?HVGAAJ??CBDW?Z@EB@?VN??D?BCAAC??GLLVLFGAEDDCJ?QC?HKGJAG?RCCCCN?LBCCCFYCMNBJGN@CAJACB@QIEYKOE?t@?KG?[?E@?HHSFN@KLHOOG@?GBNU?ODMDDIBEOK]CJGDBGETMQN?KZG@]FM?GMONGBCFC?O?JCAKLC?EAH@G[J?DGS@ENFJIF?ICGOMHA@EJ@NIOZNGOQB@@DKDEDIQQDQBQQQEEGEDQDEEEEELEDEDARCOC@@OJ?@MJFCJAUKv@\Ht@SBAMD@CAGMJDV@NOI?l@F?F@RIBQ@NND??AFN\IG[C?HN??OH?EHB]JJOG@BVAAVHKEANNAABL?CCEUHNLHKOLDHCOFMG?MDRXNK@THZFKDFIBE?DICMHH@HCLD?A?H@EO?DLKDCF@NHIGX?SHKPIJJND@BNA??MHQU@F\OH@MMl@M[TH?@?AG?HZM?B?LMOBMHHBET?EACJ?GP?OBGAJZBK@I?@XHDGHKBKGF?LIF?@OA@FNNCBHGNJ\BLCKDIB@UJ][E?HAJ@HDAHNXFFL@ACAHB_@LDF?GT@F?ONCWC??VG@KBK?PBCMANB?C?K?PBK?NQ@CFJC]E]AAMOAH?MJGI??ED@LJ@]LCGNKADBK@MPH??CAN?B?KFWFF?BEXD@??KTJCD@OHRH@]E?F?A?GGPWL?GI?CG?JDDH@t@KAD?EIEMHF??l@?AN?EAOIKXF@L@FBTJBRA@E?B@EIDIF@DA?FDH?TG?I_@@ODB@MSC?E?CNKV?FMFNED?LM?N?I@O?FFIRM[PEF?JPA?AH@E@@JQDC?HAGJS?O@BE@EFAL?JI@FO@SCHNEIQGCBMMG?A?MMSE?CB@ALFL?EA?KFIC@DH@I@M?NBA?XKGOGDDBCJB?MKCI?NSFGMO?CTHGGIBW@BMDSF\???AB?G@BDQC?KKEBNEB??RFDA?VAC?QBIJDB?BHOAWIYDAD?D@GHBB?DCNBC??YGEJGILTC_@OGK@HTJ??JKAIHGCPMRH?CFOCMKY?DIBOOGF?SE?MKBMGJOMRDHKJAFSKAXHD?D?EPAVIBAUO?FMHGFQSt@DCOE[\EODINE?GDDXFENA?AKBAMWG_@@?FL@??BMOMJVVGCOSCJEKFA?C?LCF??ATDDNEI_@NHG???DPBOUM?[MNRH?Q?KDE?JB?A[FMB?CHEJDEDOGLKEGJL\@EHJDNB@SQDHYPE@[NKME??HHAQJ?JF?AJUEKIOl@CIFHB@t@OB?VBAYCHBNM@@\[?S?F?BDYFC?EN@HSCCOMOJt@C\LFHADHNCN@FEKAFHNM@T\H?ZFME??A?CGLY?NK?CLQQQQDTQEEEEDDDEEEDEQDEE?OD?@BGMFCCA?HAK?A[FTIMGJFWE@?@F?E?AD??PL[\DRTJDFO?MIDBBBJJAEGEICDIKAMCSAENBFF@?RHMCTEVBKE@O@@PIH?ZCK@JE?@?B?YI?@?PMAB?H?G?DMBQD?@G\R?DNEHEAC?EJ?\NRNIBOM?GBVDCv@XCK?@C@GOIMCJ@WN@?M@FI?OHCSLTUYECRAELFFMl@AMJDHEKPB\MD?JFl@BHAG@NBELZRACFIEHAG?HB?KLATE?A??OF?GBGCBQQG@BB?VUAFZCOPW?HGPCCKCD?EGJVTFN@KE@?CH@@ICA?OI?GR@KQ@?v@@FREB?IC?CIAEBOGCNNALMTMNF?BKC??GK?PWW@IL??C?JG???HO??QKHD[EJ?OC?]MFIH?D@JHG@CXPN?B?IVPAGFPHKMGGDBCEGFL?OFXFHAADA[CBKZL?At@AHGHHK@KOE]IVNZBG?H?NFH?FCLIGI]@IFU?GDWBDBUO_@EAOG@BGNNXE@FIEH??P?R@??E\HK@BLJT?@G@@UVONGFQC?KG?Yz@kA@A|@c@Da@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@}@i@m@`@h@u@b@w@y@i@m@`@h@u@b@f@n@j@g@b@f@n@j@e@s@c@k@}@i@m@`@h@u@b@f@n@j@g@b@f@OACCT?JH@HGZNGIPCDGDF[JFA?DMCPPJ?BCBICA?AFHL@?A@FK@K@MKJSVL?LLVGGDCBBABJGN?N?OL@QF?D?KHJ?QLIBCN?HYCGO[Nv@K?K?G]v@J?EICMDNB?ASQXTL?OGCHFMD?@FCNJCG?SOMBE?J@KYUNZRVAECDNG@DYN?ALBAFCD?JEY@LACDETMGQMEX??CK@BAOOBNSABDHKHEFDCGTLLATLKMR?BNOPFJD?HAHCBKWJ??@?HG_@I?LBLJOOCB?JWLGHD?DRJE?OBOA[?F?AL@KF@TJPCFJD]IOGKNNOIN?@?FNAKK@C[\NA[?@E@AB??GI[?G?AJZFC[?CXFCJIBMAFBM@HICKMGYBKC?PA@BQG?KGt@?@AAPLFRPTBP@JDF?FBEGTCCZJFCFCI?GH@HDGC?GSBJCH]MGVRJZS?GHDl@CVB@JATFKEFQAHBFKO?SCSDBJCMCBFIBB@IHICCHAK\FDDPKECENWLHEOL@DNAAY@?GDHXD?BJZECKFO@AJSXGKAK@?QDM@C?M??TA?GHVO?GAAIMEG[AMTQHF?A@?AKDQQQQTQE?DEE?DQDEEDEEDEEO?A@C?BMCBBEBJN?KHTZWVLQ@PR?FBFt@D?BAKFBGAFBXLK?HB?ELGK@YM??DRBFMALWRPNK?OPBTNBKNC??MFFACIO@RUALHDKJ?AD@_@FPLG\QBGGCHF@KODFDFHJ@QOHRIHDLF??ITJRKMM@FFJK@WDH?HCCOY@OI@JHEBSVAPC?MT??GHYGF???LKH@CA@GK?BZFJRWAB]DNCAIVH??ENC?OFLG@?FKNYVLGQIQ?TAA?MUOJEM?@ANDNHPACLEWMGCFP?B?KFB][KDD?[LJE?HDA?P?EG@HJH?GLPCBBGG@RMV?KSNBIOT?H@CKDIFACHJP?NADSAUHYGGFBJI?@SGFG??CCXLSY@_@COAK\HF?DGDSUGVB?HCHI?VK?HDOBJ?@?JVLPCFAIVBKHJ?EJF?MYBDAPLTHJUB?@GCNYIFTBMGBRHCCSHY?C?B@?HS?BHH@GG?]E@IA?NGARZAAS?FE?VEMNBF@TASLABB?FNIH??GADFAIE?ILCNKPAt@BA?LOAAIKA??JDB@Y?RC@CJCS?FENBP?DB?UCRYFLNF?HGHZG@LBDDOFCCHR?XGJDTH?t@@OGGD?FIIVJ]ECS?MAGPFARB?A_@WH[X?H@JA??E?NJMV?ADHSLAD?LBM?EHPBVBDCCH\GB@ON?P?KNBJ[PFO??K?WZA@CZCGOFCFBFHG@?DFILE?MRVDJ]?FJF?AGJD@PHJIGMC?HLN?AAH?CHTR?RMHJ?A?IKSG?PNDP@HJGAGJ????BISCKKTFH@BC@JRHGG[EPLILDAB@MBG?M@DFEE?R?EOTA?CPIQL?NMGZHOM\OM@JA@D?G?BF?XS?DMXAEBFP@DBDCMJI@LCT?GGD[?PH\FCHCOA@I?NLBNJ?@O?GKFVMJNNBT@PJIOZBH?ONGICIBA?MBYCl@O?@?CLBAJFAO?HZD@DTC?DICTWAPABFGAQ@@JP??@Jt@EME@FE?GCTZJILEFWFO?ML@L?TFV??HHJ?M\?ECHKHTG?DAGI?RW?DNBATFH_@CDMHIOCHFBIPWDMUFJFNSKCREY@CGFRFH??Q?MLDLMZ?HUK@HAFNNA[WGELMLNTHBEBFHJH?EMAKALFC@RT[IWAN?NYCDDBN?OAATBFH?R@KFEP?G@IHO[?KBQQQQBQQDQEGEEEDEEDEEE?EDDJNBOA?J?KOF?GKCB\F]AQTYVRLGE@AJDH?v@?GK?AGOLIVLIPA@GEL?AC?XTAICGF@JDK?PFEMCMAYCBIIEGZEN?EJ?HMKIWGGEBYADADE?ODEISBOVFA?Q@JG_@@JA?IQT@?FUFDTNEY?GBH\FCCOGFR?GLt@L@NCH?@LQAINK@?T?OOIN@?MB@?JYM?[@JXM?@AT?WBK?@PIJOD?R?BHADSKFKA@FRCMGPWVAHDLJBCIKCC@YPJNCP?@M?AGP]JMT?Z@JOADAH?PLSHBBGF?RCBNNZLECFMNDN?]?CFU?MJVCM\LLFNEBI??I?@DCME@]@A??KQM?FA@D\ODQSOPLTZMDJB??DGBA??Z?BEQG?[LIL?MC?NEC?A]DM@?N?JNCBE[QA?R?NAD]GWVJE?OA?AK?ZBSBGBFF@DJOQCDEWTVBABV?KNKH??RPCGT?JYGCAFKAAXHAA\?SM@F??VE?LLKI??GCVLDHAHDJCEKOGFLHFCTSA?O[B]ABFKRMD?ARDKCAJ?F[RPOJF?IBPA?KCWWE?D[B??D?@[DPTBBOGAGFDO?JFK[?VDI?@WY?MAIAF?WEBDBTJD?DO@GLFZ?CH?L?OMQTZAA@DLl@CZIKNFJHAZHKBHP???GOCDFPXN?LFE?ZLM@ALDN?MTC@EKFHMSID@@FJNLDOHMLF?C?CQGIMLCKH[FSFR?F@?GF@MK@I]L_@?HGCTODVL?[??FE@TY??DJMFQHAID?OC?I?HDEGHP?[M@PWX?W@?JH\EHKF?DHFHFQBJLHBMAOODD[PA?PSIG?SAEFAACGIGID@A??EBKIMB?MR?[[\OOINCIKO?EHLCHJOECTKFOAAS@MIL?GWBLCF?ECFLCXF@?G@?QOP?HCA@AYAEGBCCAIFIGASDLLKDCHBT@?O?@EO@T?AFKMBCII?F?O_@K@LVALFPO??@@?@LAEFMCKESTZGDCN@DFLI?LFX?ICO]GJ?OAD?A?KEPNDADTCNLDCAP\@SNAKSA?Cl@DFI]KAJDGM@N@QGDH?@AIAC?\OXZISGI@AG?DN@KMGIHDXAF?FWFA[SMEPHv@IJLGMBD?MFJKJ@WHS??BBA]PGCM@I@KM?LDSCP?L?FMFBBARB?PKKF[?NMH?AB]PBCD]SNLCDADOO?GS@N@GIMHQMHLN?@FA?FQQQQQGQEEFDEDQEEDDEEEEEEL?HBCMKBHH@GHEYCLOIA\C\LTJDKD??GH?D_@OB?GYLBTIVQJ@?YIGJ?EA?GGCA?MFRFYM\HRSA?AK??BHITKB?KEC@A?XYSNAKB?HJKIATHP@?KDQBVMBMR?LETUEB?H?BI@WHCAJI]CM?X?BT?EBG?@TOCFPCCINBBAY?BML?C[?KC?SLQFOAMGERBFDD@P?G?@XMA?NHEI@]LBR?D?GNHCLXJX?@IIJCLCIKO?EZ?B?MHMBMDPYRG@A?IRDHYK?R?GM@FKJD?@LDZHCQEBEAFWCAH?@K@IXIJADC@ZIHAMMC]LHHACFF?IFPANBQBDGYGRC?FD@HCIYCPKBLF?FT@??[G]CCI?GEA?ZEMP?DRBAA@BHF\F]EFMSBG?BYGLSBQZ?NTKJ@F?@DMCIV@[?NJF[COHIF?MSAJDKQ?GZMF?GTACNMIAIACBN??B?SOVVQ@@LJFOHC?QF??HI@C?YIGTFNHOLTB?RACFBL???KDEBCCNLXMBEG\BTJ_@AMTFPDIGG?HFHEAMCDL?GHOSV?LFIWO[DAKATMAAAGMBO?GFL@IGHIO?HS?S@OYTMABH??@DE?]OQK?OPE?ELH?[G@?HE?L?P@FFEWOK[LNAYCADA@@KB?WQNF?ALETCFNH@@C\EIFHLQMGOHDQBBV@???JE?PHOSMAXKHNRKSB@CD?LBMXF?J?GOA]VLASMF?MJBKV?[??WBSNO?l@B\?VRFFGNOOl@JPFFET??QYLCG?FR?DR?AEJ?FGKP?z@kA|@c@a@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@}@i@m@`@h@u@b@w@y@i@m@`@h@u@b@f@n@j@g@b@f@n@j@e@Cs@c@k@}@i@m@`@h@u@b@f@n@j@g@b@f@aF`BCWDKA?LEFH?HPBZTRJHACCAHD[?@A@JOIA@E[?KKZERJANWRDCM?ENKKLSKLDHCCAZJLTMEKDKBAR?I?AH?FJKXDPJAEOI@MTIJGECA]CXBGFNK?CLA@B?IHNRS?LTZFV?FA?NM@MFGL?J?CQFS?@LPT_@IAE??MHHC@@BK@HOBFSCS\AWIBSHA@?EVHKMC?HC@GCJFKS[LKM?DL?QPJW?ABAIMOFGOJIAADEL@FYHAVJPFNWIM@A?CV@HGCIHBJED?HKL[\LI?B?OFJELHKDSGL?CBKL@JFIANC?\F?AWHEBJW@BPC?H?[ZVA?G?OFRMONLHMO?DS?BBP\]IA?FNQIJ@?HBL@BNOKOLHASCBINEARHETKCPHYHA@CHHNPSCA@AEREJ@\BKAZCKKE?@SINZMOZHDH_@JWQQDQQQ@EEEDQDQEEDDEDEEELJ?FC??FA?FFKLLI?@\@NDBP\\IA?BA?JG@DHD?BS]@FV?VLLLK?JJ@FGv@A??HECH@MVSPL?\OIKPAAG?ABH?NCF@A?HXQLPKW?I@EJSG?OPLWOCFEABC?FLSYKHEIJMDGGHZMBGNTP@LSJEJIHA[G@?MDBHS?GO??PTNPR?V@X?C@FNECGDQ??JDBT?VFKQVPPG??JAHMBKA@MO@O\LQH?????\TQMNNFFWZN?JDBE?@LSLBT???GJOZL?CK@]TXIJOOFNSA@??DEVDTFA?IP?BGJIR]JFKHFVE?MJFCZDN@VJIGHVB?FH]N?QO@MGP@CF?BPMBAHPWY?JAOCNDEK\K[[_@CFOJBMESWY@?QRKDJEDNXv@PF?HSCOA?SNt@?OLE@F?I?GVPPGIECF@NKLFDB?MTGEJTGGQBBPHLH?TECEGDPO@FB?R?NZEX?CG?HYDQBL?ACMM@BBGZDH?CTLHOYPE?MP]BJL?H?GFO?O@ONVMGQTH@II?OXPICJEDJIHJK@@DCV[\AIGF?RGETMWDG?DNSTZDCOZOOBFJRR?LO?MHGBRV??J??N?I\PA[K@CBMF\TFMK?CZCYNDl@l@VAHACBXWH?GHMIEII?MGC_@FAXKCDP?W?R?KP@t@?VK??I@KCJPDB?LYHL?N]CMHKL@?EJPB@DOHL@PLBTLBO?GNW?PFK??IV?TCMGE@@?GKPS?YHF?[AI?JAEEKPXMKMX?J??DFJQX?E??SAO\KGDCIDI?IE?JBHLD?B?RYJZBE@FGSOYKBDG?SYAICBHDOPCADYP?YHAEQH??F@ITVNDLKJ?FFMICLVZCED?C?G]OBGDB?RBLNWTZOPG@ALHRBMK?HDBG?KLCOLGLIDT@@?EMC?A??CWDBRD?OIT@ER?LTJ??CBABFFE?@VK?SVEEMWHZG@VCDCOECE[@FOFZR@\EAv@RBLHFOM@Y?K?F?RCFSHFGPLMBGR@B?S?OJALLBCLJC@VE@FPOl@?PGC?MFTTSA@AECJI?L??AL??@HDCLH@TZTDA]K???@?@OS?LTSN?J@IOCL??O?ABL@M?S?CM@YKFRVHNKEBOI?SFTC@JB@AIFHAEFKC@LPVGt@?I?LKK?POMOSH]NN?@FAF?TM?IYDSKJJGSJDER[\_@AFDSA@BEZC@T\ADTBGSR@COBMMK?T?BALEAJI?KYBRUN\EKRDAGBDLGCBBBLBRBFF??M_@FIP]KBM?MYQTv@EEQDQQQEQDEEEEEDDELEEGDK?CKBMCBD?CAPLIZF\]IFZ@A@ECG??FO@NKBO[[GGINPZYIZBXKHBM_@BBE_@??EAN\ELTGXVZLM??AKBNFOG@N?C@BI\H?ZAGAIPPQJ@NKNGH@HMHCA@FR\IGJIP[?[@OBDCDA?K@GHAD\XAGRGABT??OPLSEK@D?B?BNCIV\CXGEBEFCC[?GJVXIIFA@HBPt@LICNHJIVA?FGNCVK@OHLLNN?TNET?CQGLGLADJQ?DKGE@API?DB@N]l@LIHHC?FVGFDMGYJH?SPBMGIADI?GH[D?PE@DEOLES@?@DWPTCPF@HGAOSPGAEAGC@R?FM?O[\F?FZL?G?EQGP?@WHHFDHaB@GB??FLITNNBJ?OFLEP@\JO@J?ZAMGJMZTBHTCCCIKMMPGSOl@?JCLUSAJHSALFDCTZJROBKEEt@B\I@HZ?FJBAIHWFD@\ZCCEDCDH?\HF?SJICGJLV?BLH?TBA\@MABCC@]FF[FGCRQCPDNQAKHL?FNFDHBHG@VHRD?AHRLIMFL@CKTJ?LHBD?FCJ[QDN?P[?GF?OTJC]BQ@ELBB?ADMB?WSD?PFYl@PBPLNDC@DCS?CO?@FPIGI@Sl@CRKAASL?@B?JB?FHIJ@ALI?RO?B@BGLVFBIFGEKAOI@A?ZGHIJXCMHHM?LETBMTAA?KB@IQOHI@CLSJQ?@Iv@KC@@YC?EY@FI[\?JHBTGADLHHIMCTOZGJUBVZF[?M?@DYNHM?K?IGQCFAOL?PTJCHSJCZCF???FG@BOLAI@TPJNDSTHXBIDHENC?D?K???C?ALLZBEVN[\VFHRKEDAHMGKDD@GI@ISKSA?PMSLTAGC@AFODN_@C?DAMIOWOXRIV?IJDKSDCDHH[GDC?O???TE[ET@WFTEFS]AH?EL@?HFH?M?[@?RZTZ?ILE?@C]MGNTHBCBNDHQ?@RCI?[EBR?@Bv@?QYEMMBHO?E?EJDZRZZI\VKBDU@HLR@JH?ABCADDACCXLRFSR@D??H?O?SQ[Dl@F@CF?L\@VMIDFPA@HH@RK]TAZOHOCNKMTGPTA@CKNR??RMAL?NZACF@@ABKHVQRACA?LCSVD?JDBM???QBBFN?CLT\@KA[NJYQ?@?CHMHNJDKQNBII?SJT@XECLFDHB?HADYGAH?MERP[GFNSDOETD?@WB@BNF??BYZIL?][HBBKBACEW?D?HXQEO@B?TWHP@O?VCl@@FK@AKHIL?AWNK?QLIHIJM??NZ?G?CE?QQQQQ?QDQEEE?EDEE?DEEEEEEGJM?GJAB?FS\LX?TI]N?LMOCCOP?CHKNAHE?GB?XJLSY\CT@DE@@]DQNBOGDFB??RBSBSV?FS]?BMIFCLHHAG?@CBICFD?CX\OPZ@?EOCVRNGBDHNBJ\EN?W?ITOT\HFLFDLAONNBCRDJ?CBD?BXTPXEKEJAHBL[@BC?I?MFNKWQ??KQ\MANCOKRLA?C@C@YAER?PBNKDIX@HMT????WN@HOESJZSQABZHIEPDHJ?HMJJZDG?JP?WYQ\@FOBMZGLFB@M@?MCAAICRDLFBLXH?EMTXH@DD?DBGNQBOIDOILRTN??@?HLZDAEJB@AOYJIIHOEYLF?CM@@?CJYC]?M?I?_@[TCt@AJCLRPJZCC?A?GIMOQ\G?J?@DXYDO@ATQO?AB@EQLVJK?ETG?LGT@HA\ALTN?G?@ONRRJGFGHP?H@SXC?D[TCOFJHF?A@APG[BQCVA?ASHPAIMJ@GH?A?AFBOQITP?MELBGQC?SFD@@DFA?NBZILSWCC?SD?J?ALYSG?M@NJKJ[ANLHMSOJCMQH?LJBT?PO@IA?BLN\GEFES?CGJHRCCPTCSMF?MRDQDA@BANWMAK?XHHR?LIHFCZH?TMAOOO@@KT?MHWRBG[RGBGHNJAIL?K?@NMWCBA\I?DMKH?LPEFTDQEFAEEMESQLO?IOMCU@QIA?ZKS??EC?@ADCVP?RAKL?JSJ[K?FKFLS?KB@?FPR?PXHHAGAB?NALLRYCNRKFI?CFA?\TDA?HCJNY[PEFWN@@XZMHJMF\NL?MCt@?v@DIDNPL?CZBGITF?JBKBPC?DO?I@RBRJCCCQTLN?KM@AFDJ??G\TAFDQW??IYZCCFMAA@MEHKNZPKPN?ILTMHQWFBH??EDMC]C@HJDIU\SC]?ILAENHGH??MKG]GBRMJR]??FIVLDQAC@CDGCGFFLAOLD?ZRY?@HVNGWBGAFBF?GR@H?LKz@kAD|@c@a@b@f@n@j@g@a@e@Ls@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@}@i@m@`@h@u@b@w@y@i@m@`@h@u@Mb@Pf@n@j@g@b@f@n@j@e@s@c@k@}@i@m@`@h@u@b@f@n@j@g@b@f@Vn@@?CG?MSAP?OAONXOADC[@DKWARR??BPBI[BKE?W?ZBGH@MGAV@FGIT?OQLECQLC?DACIHNBJNBEP?K@[WQM?IDYJGNFHFMLE??A?SBO@I?LRHRPNASNHF??[@?HN@DEV@CYH[TATt@FH@SL?WB?JEBCBCAAFIIXT?CC\INA?Q[KB?A?DAAD?YZHB?HST]AK?NAFLLYFAAAJDBI??U@@@X[INCRD?SVRCE?C?O?A?XCKAFA?RH@ITDA@RIPFCBJDCGCBCR?FHAL[SAAB\QQZQQIEEEEEDDQEVEEEEEDEDOXHHCACB@MYFE\G\YTIB?JJMKIM?NB?NCDTOME?@Y\\ILYVMFF@HAHEFHKLGE[EDF?IZ?IWSIAG?N?DD??MAEPBAYl@P?[AISZBGA@C?HOFB?HPL?UD?XPJAXTGVJG?BCNXDKJO?FALDACI?IOG?QQIBDL@BJF?NNGLkCLECJ?]HHWXFZOBLWY?ZN?BBGl@L??C@?TND?SL[GAM?XQGC?AFEP]?W?@DFFKBILP??D?KMLY@ECB\?A[HCD?AFG@LIl@[K@?GLY?F??FQFRA?E?H?AFH]TPHv@OLV?]NFNNIJR@@AE@J@?HGR@R@I?YP?BC?EARKET??GDOANOSVA?SB]RPE?BL?GBSBMBCDAB?NI@@RIZOGPPWHCBS?MBMFB?@NRUXYBPGPA\[[BKNAOQM?AGH?GAt@?LEELL\KLIV?RCEO@DSC?@@@@@?VLAIBNLXOTQDH_@ETEAFHBCMAT@KKJ[SOP\IFSD\KMMAMKF?F?I?VHCBSLBIFICP?MAO@?NBZNCM@NRABWVH?I?QAAX?S@BC@ETCKH[\?H@[I??Y??J]BJWCDAACGPBYBRKFIMDOVL?]D[F?K@MFNCBLMYMVPE??SFGVEXGHASKCAAFKFRB]LDLHMBWD@G?IPNMQHNC@AQGXKH?PBY?P?DNOPVD?ANLSD?OAWK??A?JL@[P?CCPPL?AC[BCE?TB@DF?GE@EK\FS?PPQLB?A@OXB?MCEAYMAOFIDPL?SDNPHF?QOGJBFl@ECJD?QLFSGLXMJI@ALCG?E??OH?HBQXI]T?HHP?IABOFTAB?KAPMO?@@\?AR[PELS?FDSJ?F@CGPGBFDDOGRQTPC?BTJCKRNEANC??PHJDL?ZSJGLJHYJD?YJD@BA?CXOKIKGALTSIJN@TGGNML@KMSGDCC]AMBID@[PL@FL[JFC?BKEHACQHYD?DI@R[DD@VDLO?Bt@AS?@NBDLBDCES@V?L@BJLCLMD?KGEI@ID@AUJCNSQAGDRNMM?P?F]LNPKDS??N?D?TKAY@CNLIHCNLFAML?GEWBEC_@?[EF?\?I[DT?\KIDBDPGFE@DA[@GHKG\?LPCFAAVLRMMPDHBBF?HVA??NQCMWJAZEVGBXALG?CLMHHVGKCECTMICBFQ@JV?E@PCHI?B]Al@?GBDISKNOYP?HHQTKHSB?MF\KA@J?ELINDAJ@BQ\AI??@[MAMB\?F?A?F@SIM?HNIZBL?@EZLt@?RKBNFKCOBCRFF??ZQYHOC?P??IB??[@@@EF\QQQDJQQTEEEEJDDQEEDEEEEET?CH?CK@GX[I[V]KKLKGFOOESML?GGFC@?@HE?XTS\IKA?[?E?CSE?HD?A@O@OXVIVP@S\?SD?D@S@G@J@?EMCLAOTNL[PA?KMCWKI@MO@C?EFJMXSLvAILDIGICUCKEGLBU?EABB?NPAII?SF?IPNW?MLM?ACBMFJ?LM?PT@WPHATI???GI?D@GAE@GOFKLP?YRP[OD??EBL?F?A?BBEEL?XMZQFLPRE?D?LFGAL@MCD?BL?C?@YI]O@OQMJCDB??]\B@CMLFAVBDCB@S@FV?PHBNV?]NMOLSH?O@WBCMTTDKt@LGBGSQCQ?GJE?KSt@GI?@TQLGK@LKLHCD?RKLAB@@CSBNPF?WKGIMHHI@FREAP@EASBAXPDCKDBCRSFJCGJRA@?PJDTYPOPM?HNBVC?[S?N@JJTNKCMLIKB]EC?F]BAZv@RFCSGB??SZEDO\?@FVNNFT??NX\AS@KOBE?T]KBFFB?TIMG?@LPKIH?AFOESJYGDBJNCF@ICT@BILIG?B?v@F?BBIYNMCH?PJLBJ?HFLILTBJN@?HAOPYF??NXIRCA@A?HTSIAO?@HOPVGCOC?FLEI@?THRIAGKMBA@GT@PHHEB]YPG?DDTXIAE?FOH?BBPWSF\At@?CIAOBT?BKLAICKCHISOF\OCGDMZICCARGNAIIJ@@?PSQ]CBBKFCGYCR@JGNJSIQC?@CYRDZ?JBDFHT@EBARAA@RDHI\E[RBG?X@K?OMO[D?DR@\B?MGSLAJJJSE]??@OFW@MK?YMAIAIW?A@GIFNKVC@CBT???QRNF?STZKCRECDPDOVDKASB?OGQZB?H?@XNBYB]AR?P@D?INAGBQ?TNKKP@KJ\IVKN@LHJGKKDPNDQDLB[BBD?OLI[BAHI@VMCNl@XDLHKRADK?GBIWKSCMMRNOEJ@@XELKHSB?DEBITLWDJMJRPBGDZC?@JCLCK?DFIRPHXWUE@?LFBQMOL@XIMC?@@@FL\[@K?GL_@?HVH?TOTBDF@DTNJPQ@VLN?[MBNHT?JA?[W@NTETKGCUOV]CYCG?G@D@TEGQ?CENS@NTFQLV?]?EMN?CSCOANl@Z?BMJNKSXLC[X??BCMOA@IG?OCXC?DINIXNASLON?AA@?FL?@HKLGRPW?W@JIGIMP?GHABD??X?K?LNH?WWIEG?BPFL??M?YBNBJEIBBGLRIP?I@EBP?IHKKBVJD@EC@SJFL?MWPIBOG]NNSABABHKBERKDGCLSQLI@CVOSH?DAE?@K@NFKGCNJM?SYFPTSPXPMFOCBBHMELJBAD@MLIDILI@WA@ICBNL?@AMFAt@AGF?ILITAZW?@@PA?JREJ?BF@HGCUSv@YIAVLARJBKMCTJC?MEGANl@G[UMBRIZSVL?LFCC?D?H?NHL??]TMIOHFLIB\KQKBK@OAG?CTZNKO@LIITY@SGBA?HBJKCDB?LMAM?I?DSS]RLX?YG@?EJ?AOB?ALOCMCTJT?ST?[P?@CBKFPKA?@A@OAV?R?L\DCIVIAKGOB?JVBH?NK]KMQL\BS@MIWCN?DDBIABDC@BGBXI?YQGGZBQBFFEM?TJCEMNLKEFJI@RLT?WOR]EOHDAYNU?GLTBWMGJAD\@?P@TLADF[?l@EEAA?NV?WF?Lt@JATZSSEAFRKDH??CHZH[PFWMMFWTL[HJAGRB@?FHFM?PCBTFD?OGQLL?\I?]AAK?GE?HLHE?RENBDFLUX[?SADG\EG?JG@IK?]HC??RD@QP[GHMC\DDKOHBW?KEN\PCTRPOYO?HKBQFKMYTJFUDDHMPAW@MT_@?P?AVGFOGDDQRNAANPJAEZIGINDNLI?CNKBBATQG?JI?@GNIGZT\HUGALl@?GAC?PS?KF@CABR[ALBVBCRSAHKHH?GLI@GNMF?GLLS[EHDP\MTGBIPM?GODME?JKM\A@\PLD?JTZJH?F@[ZNJKDFDNHBWS?IBSNL@?GHYVD@D?KVDIHG@KNK\SEQLH?F??ZDOBG[C[??@AWZD@\O?LXGEGN?GHPI?JN\HKNDM\Z?DDLALHACMHIJHNPH?GSOKK[I?FD?@IO?IG@?FSNB]BBDV?DFPZOOCKNIESPMAOFTBNRMBOKLKDFR@JF?JWCQLJAOR?BETCGOS?BALD@GH?WYNPIZO?NHOOIO?Q?MAGEORDMYICLG??PCCLKHDA?PADMG?LG]?CAIRJ?PIDHYEQ@D?T@GOFDl@QOM?Z?IW?DHC@TIv@??\BMG@NLEDZA@HJ?LTRZEIBMOGz@kAIF|@c@a@b@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@}@i@m@K`@h@u@b@w@y@i@m@`@h@u@b@f@n@j@g@b@f@n@j@e@s@c@k@}@i@m@`@h@u@b@f@n@j@g@b@f@n@j@@OVGVL?J?ZEF@AQHDLP?HM?TMCFEGECIX@@CBLGAZIVL]@O?YEBCJFB?QT?GM?LC?N@XPCB[OLVH?EM?DFIOM@BLMN@?ILIOOHIW?G@D?DAL?YFL?HF@A?AI[H?WQAN??@??\INSFDL?JA@SZAFHI?C@MLA?H@PDXKICALTFDHIL@OCHDCWOO@P?RJDIV?JV@GDWBAFIDGBY?CHADQKDIEVB?JLHHTTZAAHCNLGO?YRHPNMOH\B]\JN?HIGKG?[O\?H?QQQQJQQEEEQDEEEHEDDEEEEEBJACKBEADPAZIXYTBWVGBH?JECLGB?CKB?CGCILIYLICOM[JFEJ?NCKD?GGDFMWLYTXP]@IH?GHACBFCDMCBGSDI@RITZ@CBMQOAGADO@KAAKG??TDYPQIVS@XC@KF?t@KE?BBCOF@RX[IIMWDJQL@CDFCFF@JJ?H@N]PPCTIPIRBKCMMEGJ?H?GHHHNALPPIPQ@QE?O?KCK[B?FMB?ALCGI?G[BSRQABCD]?LC??GFFBDI?BL?BFSKSTH??HLEPAKJNAPEAKIG@?R@TIOAJWSDCNGEANLC@EZNB?LTP?D??E?MRQC?BBHGLEM?G[AOQATZHKC?QIMCDOBCN@GSIHAINYTDOl@EFAJXG]EENMD@RPBHOYDZOI@ABFED[PQFNEMC@]]?E@JF\PO@DDCJFPWICXDF@?PEROKFL]LDGCD?JAEPSZLO??MJBII?JNKFKDH\ACGTR?XPVGH?BSPJ@JGJDCFO@[AIILAEI?B?@RJQBKJ???@BBIVBC?ILTZDGv@JLYCW@BCFKC@D?XNIHGARPEJBB@IVLIA??A?KQYO@HG?HYF[NPBN\L@PCDAMK@OTNSD?v@KCRPB??NPWW@?]OC@l@I?OZO@OBFLELBBFVDRQ?H?CFIWBV?HAADVG@LEBDJEY?QFT@EGD?PTBNGZALA@GCB@Z]RBIGMOK_@?CVI?KK??LJ??EE?LLSYXFACOIH@MXEHB@LOHBKVNTQO@QBBAFDHQBVJENAEIJC]BBRYPAERJBA?IACICACNBI@DSLEA?YNWAB?@?BCYBIA@E?DIDTIFMNGJZ?IHABIL@K?ECGMIVNRWBOMMR@JLBBDFEHV]D@BYCF@H][OJF]L?P?CJABDITF?DO]C?\AVNDHCOTR@QNMVCLFFLCNCP??]?CEDM?LTRTM?AGVN\GAN@O?BBP_@POEGWRHLF?JINJVRHNF?A@KSSKJOMLGQHJ\IFGIKIACK?GB?BMTTBC@YVB[B?HJHYGP?JE@?B?R]l@?BDFYPWP?CCINGY?@Cl@AFHl@YPMEALA[IM?GBEA?V?[AFEEB?PICJMKITZGL@K@B@IYIAJ?AOIMTCFGAAGCKOYPKAOYCZGFXBSY??DOA@?OB?IQKGEIGZJJREB?ARLBKBANEKL?ATHE@QL?\CIB@P?M?IO?BBHTZBIMB?RC@XXJCKOLSTBGOC?DADLLACALIVCQD@@FSEHMQ]?NGDLS]NC?OANQWKN?P?@C?ZPE@@?PTBO?@CENYG?IBBRMNBIX???DBQQQQIQQEEEEEEDDVDEEEEEED?RJ?JDG??MILRV?[RPF?H@?FWFS@JDKONFCKB?LYSV\CBFGCYFEBQB@EEHHKFB]D]LT]TCNHHIPv@BLHNDB?C?DFC?T[YOIKENFITJNA]N?SHHM@OBFLGHWRLP@?CLLFK@SJKRMFHN?GYC?PX@FME?PFHTH?KRWJNA@FHIMG\ZRE??CIALDHKB[IBCHJJE?ZB?QYv@GFTU@PCNORDPODFKHYAADW@[RDF]LL?BC??G@]@AMX?CPMM@FSTK[AGRPMBB@JV?GMHGTBDDWKWIFA\DLTJCSJBDMG?NNXFG@IT?ZE\J@LHWACIND]H?BF@H?CL?AGYRF?TGT?BPF?CBVCD?@ITMNH?VILFH]GGGBY@?MCRC@LCH[D@St@ZZABPFJBN?RPGJEAAR?O_@?QSK[]?CIKTCFPBGC@@MKFNWLIKVDPK@COI]LG]BNMBCKKHHH?SR??FYHOLAL]L@VFHYK?BJJIFGC@VDB?HWW?PADL[IBDHHv@FK?LDJDJ_@DELTBEXZKHTAVE?T??@FXC?AEHQ?LWB?GZGCASL?C]?GUE]MECMA?RRECQ??DIQLGSVAN?QKCC@I[CHFAKKDZALCYKFURAFVLHE?OFOANNYT?DYAQLT?[A@FDXGJD@TDOW@TC?VKAC?XGSBB[F]ANO@APM@H@RO[E?F?IDIV@IFGCVHDCPHMMA[BFTDFFFCT[@GXC@]AT?M[EBJKDI?FCIGYJBSO@J[ANWZHQ?KN?EELLOS@OPD?@BLS?C\VFALTBEGNCDBI@OBSFOC]?AICZTAI?_@FB?GLNLBCI?\ENMFFP?]SMH@IHG?E\VN?ONL?SKM_@C]QL?FQIF??FEQ@IAOHB@XCYGFJ@PGTOLKO@@DNCEIZAHQ?LJFGCFMCXIZVVACUABDYWt@ED[KTC?GMNH?[YHRGMTA?MIVPCF@B?]GHKH?EDESVLVl@IBE?MIQ??C]IBSKCCBACXQBEE?EL?@D]IV?QHRCY@B@?C\Q?M@CKA\?CNATVB@DDTP@AJGQ?K@ZK]FJ]?P?POGFCT@JM?KPAAW?ZY@FCOVAHVF?TSHCMFFGT@VJCHZGKTNA??SI?WIVZCDEMH@?TOC]?BM[MN]@XJ@?RBWYDFACGCX[\?GQ?@VCHFQKELKAIVVF@?@GE]FKJRHTHMEIDSHDOE?YTKH???CIH??J[CQIBBL?V?KMZIVL?CFBJB[A?K?RJI?MVBLHN@AD[LECHFTW@CHJATAEIME?SAPCIOFGPCHF?WJF@JPLGXNNAQNOL?DL?BAESB?MIQQQ?QQQEEE?EQDEEEEDDEDE?EBH?BDCF@LYI[\TJZ\IBU?O?DFVODN?OACAAHXNEIPW[TJ@?@?E?IFGD?BBOHOBI?L]L]ILAD?^ZD?@[H?C?FMFVYIPX??I?GFD[DPFD?RP?GBC?M?F?BRLZIAFFPTZXADFLNCBBK??HGY\RP@W@?CBX?RADQIHKAJBBFKE??[QRCIBAI?AAB@?ELIF@KM?CSHSP?JH?IY?CC?@@MFASIAF@G?IBBPOIF@PIB?K@ECKVLI?K?AH?ICPCS?CTHY?BFOF?IRNJEO@O?L@Q[S\?AIA?JMNMCLIXv@A?????@Y\LEKCFDDQCFKWIVEONE@B?FERYJSBKUBHIBOX]T[@@DNKBAE[H?\V?DFMGBV?ALLITZ@t@BDCU]HDKRENCIBEIVMGBITEXDBA?CZHCV@HF\M?INMKLFIYLM??ODFD?CYF@BEVVCFFNHLSIQI@MB@AHAA[_@S?SAGHL?ACNFFYLSDIKAFGH@SJNZG@VMO@@CBFLITEAOXP?B_@I?HAQGPDMGBGF@J[I@GKLAYD?DCL\AO?JVYDK@?O?FLSBELWY@GCY?ASKPDJ?SCAGD?SRHFCWKEB[NF??A@ZP\I?BLAG?HQ\BPC?KTMCJC??IHKIv@?FI?BILLS?]?DCA_@?OGWAQOBWJDI?ELCR[JBC???F?S?ZBS@KNNFIXEDJ\IGJK?BIHEB@AIC?PUOS]D?CDLFC\GGFZEMHCOTAT@AEFJF?S[NIVJMTSCOM?M?C?ZO???B?SSKSCJSHXQBLFB?@DI@CDGDl@?W?PJJ]QAKWWGQM?CCTFNICD?BGO@A\]XC?BAXP@JIPKCNJR@AMKQ@@MHXPTH[HWHI?YG?FFK?LD?BWGBBJRz@AkA[|@c@a@Nb@f@n@j@g@a@e@s@c@k@a@o@p@`@c@a@b@f@n@j@g@b@dAe@s@c@k@}@i@m@`@h@u@b@w@y@i@m@`@h@]u@b@f@n@j@g@b@f@n@j@e@s@c@k@}@i@m@`@h@u@b@f@n@j@g@b@f@n@j@nAoAL?QWYAL?@HF?JHHSB]K@C@KDRL[H@BTW??MAwAKBDIVJOE@LGNV[ACLAICTE?CNBCI?AQFHNIEQC?Z?GC[[B\MDNKBHL[BCCSQCNQCC??PJPEBNV@O??RP?IG?MPF?ZBKJT@ESSEQQMKFI?LKEH@FDIBGPCBALAFF[LKHF[EK?MEXCOHSP?NG[?EEGIRKG?BKET?FVNADRBLG?EDPWXL??EAB?J]TAKMCCGHY??LNXt@HQF[?EHAS?OCICKMA\IOP?TA@JTE?M\OIMDAH@IJEOLOIBTNSLA?H?KWHFLENJXJEDB?SFNOILBRD?EZMH]GMCFIA]B@B@J?RIICLM@OHYMIXU@?JGVCF?QOBOIDCPBCIDBYGDQHBHJ?GRJCK?LAGS?L?YHLMCJJ?F[v@@WDGMLAEIW?REQQCQMQDQEEDQQDEEEEDEEEN?RFHBF?JBHYMT]RZO@I@?KB?B?Gt@XDDAKNJDIYXILIHAE?CBF?J[@MLDFH@@?QLLLLT?EKJBFN@ADGXTAZ@IFCO]LP\R@D?NCM?@FAO@BEOLP?F?TIZLRZBBCBF@?HO?MN@WFEYG?HLTISLOKJABDBJ@??DMMQJIAB@LLSILWGCv@?GB?ND@DNFNP@IO]SI]RG@?NOFG?@KHGBFG?ILFFITZSTP?G@??FKCCJKM?TLTFBYW[OI@ICAXCKMJKBCBGHAIBYII[DIA?TOMJF??@LNEAOHKTQ[?LGFX?LBXVM?HFIDANE?OEG?v@HL]H@QYDPPO?B@@?W?LG?OMJ?wACLLFTSSGCEF@GBWYNQFCG@??@XEWIKt@QYGPGH@AXO\BTCBGAHCPFND\ZKFIK@NMXCAELLB@EH@?M\L[BJCER?POM@XFIN\AGC?F@FNXWSDG?RFH?GFOL[\QFFCAAGNPQLJGLGFGQHAJGB[L?DAGHMV?\K?PZFDEAYG@HISV?@FC@KIKABPGGITAK@?YKOK?EXR?BZGOMGA\?O?LWFXBBFKAGQ]JAICDKOF]OE]QCMBDJIGFPBAVEX??HFJ]H?FDTDPCGOJJIIETEACPHVFADFDSBGSG??GIVNE[IA?ZBQKG?N@??@ELQEUAQ?]CLHCHYYPCB_@@PFUDG\OLA@K]LLBABCYFKP@QJEGHA??[I@AIBO[@BR?B?JGLM??PNNITO@?MEICKH]@?I@GXXFE?IM?PF]BO?AMM@LME??\?PPIl@?]Dt@Q\@IGFJGB?WHBHMQ@ECIEHYBGWXITAE@EDRRA_@W@C??BIVKH?BZJFIQAFFIDZJI@?SAJGQOAI?C?MIFVLFX?A@C[MNPCYG@BKJBDWUCQWJKAY?Y?DGDLHBHYIN?FOAVG]\L?DKGWOBGQDHDHQ[MF@UO\ADIILGCP?BBE@S?G?EYNN@[FKNOITZLOJYNPNFLBGAC]NNEHDIBHHMLWBTOCB?LESGP@H]@KF?INCWVLO@LHDFN@W?Y?HH\MABLXGAHIABA]K?FH[HR?ABCB\TF]TCN?[H?ABHTB?OCDTDNIK]R]YLDE@AH?HH?LGFB?YA?L?]WAI?PQGHB@NE?@?\?KE?BQCZ[HKDTCJWP@F@ANYRCHF?K@F[Nt@XZN@VX?D_@M@??MGLIDADFIXLBM??EOLQJS@@ALXJ??NBDO?XIKPLFKGIR?N@DG@]E?WLGM?E?L@GLIDTD?XD??OA@DAVZOMA@M\A?YLCIG??I@JDTXQTQQQDQ?QEE?EDDEEDEDEEEEB?FGKGM@NDSWT[IQS\AHNCEBB?LKEBNOG??BLQLVLXKABH?G_@CO\GOGCH?BJ@N\LZVZZI@?HANP?QDCEFCHHKAAC[[[[VDCC?BL[@HMCJR??MC?GHILIIL@DDG?GPVF@@@B@W@EDGP[IX\C?MKK?\PDNF@ED?S?E?C?P\VVBDUKB?BZFLCGE@LMD?D@KZ[IRVBGB?FLF]BL@M?LO?CHFK_@LIIIBC?M?YD?FXI?NGBCK?v@]CGQAPLHSBJHRHZ]GOB@@EKHLTYO?ELXD@Fv@IB]V?AKD?@B@IR?EEAVZRMCBFBZ?]?FMDKHHFS\YFDNJISKOFHV]DNG?F?MSJLROK@KJJQIzEeAoBeAeAeAoBeAeAeAeAeAIN?CB?COFDDR[M]A?KA??N?CA@KTAGMBS[B@??GMJ?C]C@DMJ?LCCT?BFANCCCDHOFBFDL?@ALI@@NBSH?MFEQHBAOGOALCWY@HCKRBMIBEAMFCGRCBFOG?XLAAH?KJA@CRK?HB\GCYFDKKOH??XNOC?FHIBEABZYPDFNWNJ@HBMCTKJGF?RP?GPl@MDG?NCHMNETG?LSC??ZHEAOGKPKEZ@KHW?AB?RV?JDE?\?OJFD?TPL??SFO?LCXB@IVOGMK?@RHAGTBE@ANMELSS?QEM@YABGI?A@ELOMMMBFR?Il@_@NJMOBDEHSGPI?JCBX??[G@I@BNAFDZCAGNGSC?A?PAGAC?J??AIC?JNGJEHF?S?P_@[DA@MO??DB?GLZAI?CDRGN?C??LGBTCC\D@?@GCNIS@@?IAB]?EHFEKVCG?J?SCE@FDPHCC?OBDSBFGELWFHBDVNW??NGFCKSAMQHMNHPGABCEPP@\@HCOJ??YN?KM?PPRO?IG@?OLODH@HDSAZ?M@B?HTNQBFAJPONJHJCHUF?JAXKN@YOZJP?GFA?LJDH?KCSB?E?G?OPGCA@NCAHH]FZJSKF?B?RFZSD???I?QGFGBGGIL_@?ASHQA@J@B??KJ@ZCY?DBOCBADIJCEG@S?FPOKPCMJ?BRJNGN@DKJBX[D\H?F@[F??DZ??MXJJCXN?BG@IH]CJROOBG@MHBATNDHJ?EMQ??KB[\CFENBWFIYPQ??CSCCC?DTDXPRP@D??N?DDD@mCYVCRQQQQQQQQAQDQQQQQEEEQEEEDDEEEEEE?LLLLLLL?GSF@BJFNCBJNDN@DJCAKEMRUIL\IWt@HA?C?@HE?GMHHABCDJHJC@?KEAHAIL\KIYKLQPI[QDNBFGJAOM?NN@DCGKA??N@NM@G?EJCHCCLITYISFKGAE@?GC@t@OGBFHM??G[DCJ@UYYN?P@T]D\LIAL[HOv@DNNDTMCC?@?@@EKFFDJ?CBJC]SIIIZAEBAN?@CDHB]GDC@JKAC\JF?NC@??DPDGEL?RYLTXPITVCOMSF?W???Nl@HFRFN@FDCKCHMFD???DBDSI]RIIDPCFACDBJADKHDOOLE??CNARQKGl@DBFCIPRNPOIBYIP?ODBMBO?A@BFDCAN@HGILGN@OFFNBSI??SS?HOBJGRBE?Q?EG?Y@?A?JOBHHPVSAA@HGLGl@L??ZZTERDD?ONECAHACOO@LM?GD?B?FZIVH@HAEA[DFIR]SH\l@CG?H?G@M?DOCFCGJ\LDB@??HHLEA?LNIV@RRLL@?COLABPFNN@?FBG?@DJAP?D?A?CBGCSl@LQBQLRHDEKCAFFZMEFCO?OBC@[EHHEIBMDLSWIQ?@CCQWLBBEZASEUQ?BHGHOFKSK?H?DGKQAJCAM?CCZE]SRHPRHDHJ@HHACCM?DHP?HGPI?NWI?HBJVL]CBHH@?IO]SLQZHI??M?M?l@K?MBA?AAHJ?GIRDINGCNHRCG?XRHI@?F??@MCBJDA?JDY?N?ALAWD?D\?EM?Z?JLHILLBI@AE?l@N?@Z?OGGGA?C?PCEEFNQ@D@GM?TESTQ?EIJ[??ED?ODAKCED?@WV?OBPDCR?DNLEA?M?@\@@PZAIK?BNKRKNJ?BGHHDGKCQGSABCCA?IXJILETHERIA]NOBMJBHOAH\MDB?\DOKSOMl@I@@B@K?AWLCLKHFNDLIA]IC@K@AMJGEAADGE?BDPRNDB?S@@K??T??WILTNDABCKLK?MADS@@?G?OCJ]?DDDIKQJ?YDM\?Z?IC?HGA?NHLNOHMGOO??DHVEMKFSZAGA?@ITILEIEOHQGB@ND?C?BDLD??GABHHW?@OV@G@GLEGI?QQLIHKAF???l@WNB?CEB@?@HJKLFHVT@CIGKO@N?LLFTIGv@CAHDNAN]KMD@BAMC??D\BWCCJJSG@BTJGLW?CCOPGZFE@BPAAECANDQQQQv@?QQQQDv@QQQQQQEQEEEE?EDDEEEELLLLL?BDFG@HODNB@CHDHNCR\TVRIPBMCAABDCFMCBE?E@SLEYZPEMIOEX?LWC??@\CHFIA?@CBBF@BIGDBFFDC@MGIA?HPX[YGE@?HTAI??HDFKF?CPIt@HLJM\BCCLYYHYJH@FCUMAA@?KWEA?I?BKDEC?BK?OCLPPLM?@ILITL]TLXLIYGABFABHCGXF@@GLKJBC?EIKIAVLLKJK?GAG?HIENGP@FI?BK?OBFBAHI?NZII\PILID?GUJIOFHM?G?AL?GDAE?IOC?BISPLS?KO??DF?L@EFI?N?CIKFGD?LKTDK@CCIWVR\C?K?CDSO@DE?FD@H?LNR??DFRLTR@DSSA?GTY]HP?EJEKSCZQDBG?[NHGJ?GB?LJOACTTKAZIV?CE??HMLCK?JVBB@J@@EQVL]?SI?TA?G@TR?DHBYKCJRMFGGWG?NB]CD?D?GSKDVPF?JKYWYAPHLBNH@AMJE?LQJRMNGAJ@?YW?H?HQKMOV?I?@FBB?CA@ZFYCJBGJ@FHIRIXPKRDJAY?EDIRP?G]GBMDEIRG[\X?MG?C?FEAXES\C?Z@BBBM@FK@?CJYAB?HVEPDINMM??XDVJ]PADX?EAA??C?DD@C\HWLPFJK?AAHANYBIQt@@FGXELv@?K??MMBI?KLR?DLDII@VBEE?DW?RGGK\HFH?@NLHS?KLADBIDJDXTON?B?ABODXTDCT?JC\IIBJMEQW@YHSMDGERl@BM@t@MNAOHBAPT@IPCNAM?FFHTAUGEH[FAFSCI@LNBRCIBFTD@ZQA?GGL?NNHv@RMY@?@NL?MAKS?B?B?M[SGJ?C?INOGLIYVG?DN@A\JKFQXL?AGANOLS??AFOAZCLFE@EC?J\JELG[KSBGG?D?@M?JIZJEIOOZDTIl@OD?GLXDGPD?NPO?I??PAE?@D?RMBPGHH?NJC?IM@L??TSAEJKA?]GFF@W?BDPBXCCI?KLK?PDKEOJIF@AG@[T??OSAQTGHCEU?IBHGKCPCAKDI@VZJNQEGC?EH@ILA@?RC@GRJIIAH@DPEF??DCAY@SJGQRO\CCMPC@RAJ[EK@?XVL@NEH?F?HI]PJ?BAJL?HDVEBHE?IA?T?IGJHFZBGt@??BGEIZHF?L?L@Q@LG[GD@TTCBIMCFGGNGKA@@LOKIL\?IBMSL?MEH?JIH?@?TKGOJBFNEE?FOL?CN?L@XGHVHE\JSQGLDAQOHLFAF?AQQQQ?QQQQQQQEQQQEE?EEEEDDQDEEDDELLLSBTFl@DFDDOKKACAEH@BYSLXTPIJMHOJH[Hl@N?N?MQSN?C@L\QLIICN?J?K?KMFFA@CDH@CTIFGBBHL?WXEFRWWHCAHHA?QSD?HMBFAJ?NB??AJ?@RILT?RPQ\VVICDDP?@JEAAW?@BF?DAOYDCHGDTITRVIZPLE@NJFNDNBKFYGMF\EG?YGMJJLLFRVSIJG?G@??G]VNARDMMBBCCADCBOJRK@ITXWDRWFKBFF?CDCWJ??COB@ETRQ??DB]LIIXQEFGLMGACDCG?TTPB?HHCBGFAJD?Al@PPPTRSHXNMMCOB[B?t@C@DEEK?CJKJICPLLQNLVYMPTAHDLMGNEADYBJA?G@?@t@VHTCOZFRT?SSJQDQAEBL@??KHADD[HNNAQDB?LII?F?EL?WXC@DRCDG@Wz@_B`@w@y@i@m@`@h@u@}@i@m@s@c@k@W}@i@De@s@c@k@}@i@m@`@h@c@k@}@r@e@cA`@w@y@i@m@`@h@x@`@a@o@p@`@w@y@i@m@`@h@u@b@f@n@j@e@s@c@k@}@i@m@`@h@u@b@f@n@j@g@b@f@n@?j@g@C?SABMGLCK]J@YPTCEIBCKIH@FAMFO?LN@B@LJO@S?@BBCZIPXVAWIW?[IBA?DB[B?FEE?HGH?BBVCBTWV?M@PYDAZ@OBAAKBF?DESIFV[PI?AENQC\?NJ@P]BFCKYBFREJI?FNFCOYOGDB@@TRKEKJISC[I]BB\CBAEAMJE?JDCPHYDGXTZ?QXDHIW?DCAMLBJIJBEAHR?KSARL]BO??IIV_@TMBBHAD\QMBACACH??GGR?PWHTDPGEBC[XSNGQXSKZFWJKFIHKFXTCGKDC@JIDEZFMITB?RBJQGCK?FL?FFR?GBPNFLTLLT?BDRLO?JEHBFF]AK@NSXCHGGD?ARCQVl@Z?D@HAGRH[HPYLFXKSCALFAHJHEKHDMFP?ICG\LJYLHDWDCCL@BLKBHF@@l@PW?SZOI?ERNCUCARTANRFD@DVQ??M?HHFODMPDWOO\MD??@TXA]AOI[\?SLS??MFOMB@SWECQOBEFVDICFLWHAHNHLJJ?CEFl@C_@B?LSMI\FPGRD@DX\HGAT??LFTA@KAGM?KKHZ?DTP@?X]M?E?_@t@PBPMA?QHIGM@RQA@G?EVWMOKNIDCIBSHMSBCDX?H@BFGJHUI?AY?BSCH?FTDSTXQTIXMNE?SCM@FKAEBPADIG@PKOYCYKKW@YLCTHAB?IR?JJA?NIVA\?GMH]BE@DRPLLD?GDIV@DJBB]FE?KHCANKJ[B@HIFTRH[JLOCDI[NF?PLO?AH?F?LRSt@@@I?M???GB\LKOLMD@B@S@AYK?V?GORJG\MIAOYIFAIVBIAV?FL?NJGAVEFKJM[]LBV?@YCNHAEWTBINJ[?DUNGMT]LBBPAN?HS@GSDCKK??@YYB?BAIABGL?IMEQQQM@QQQQEQDQQQQEEEEQQQEEEEDDELLLLESCD@K@@??@HC?E?K?TLXX[I\]ILPD?O?OBHDCHD@HFK@F\IRLPII@XDIOAJHF?NDAAOODCX@D[VPL@SJPLLR?RBMC?BFG?FW@?YA?@@IB@A?QTWHC\LBFB?MMXL?C?LCIAGM?BSBNCMDEAHCTLRYMT@T??J\IIMHRTGFBAJC?CAVCCIWYPE\TILGG@PTFFH?KKB?BFENTFYMXGP\@P@PSWF?@GA??TQO?l@B@AD?t@LEQLIMBZIBW?DBDNDQGTSGXQOLF?@?ZOLNVG???\CAONIIOXO[SDZDGASIZQGA@?EUAICQ?GOK?@RLTBIAGRNWLDGG@HH@@??[BSQ@LHHVXSG?PQSKPA?G\R?DJ?@]??O?GG?LI??LIFSSGH\QBP@BNMPLWMCI?FNEH@H?IXG@KRPEF?ZUEOLGRYHZGDBHC?RG?CPFR?IDGL?QCNVA?KQLDLPFKO?BJ@CPSDCFDVJWYBH\?@P[LPNTI@FK?MSE?LJKWZBGNCMNCLRPHELZI?BXEWKDCABC@t@EWOQMBNNRZ]YGIKHBJP?ASMQV@F?WAF?@BBRRC?GT?BSMG?IMZ@CS?RDSL\TIA?CKASBTMPGF@]Q?OIYBB???V?EIH\ONH????S@KRUSKH?ZJLRKHYE[A?FMJQT?SV??CN@DCNCT?YREPN@QOGHP@TNLZQOILRJDFBOR?[BPFKSKCK?DTCD@ALAAN[IR?FD@GSIVKCYF?LNGN?\AH[IJFSOLQJTWE?AJ?BJRGEC@O\BIFVIC?P??MFCWQVSYQSCCGNML?DJVTLQB@?@?I?CKCNW@CZJ?@KPQRJ?CLB?TGKBMEKEQ?GHTYJHHLGI?IRABVK[JLFDA@BF?FCAL?BV\?PR?NBSXTITGA\HDXK]CKFJ?NNMAQ]K?NFQMOLJYS@?FJERRP@HGPGS@Q?DLSN?D?CRFWBIMDPASA@???CC@HO@IVZXCAW@@SL]CEE\LTS?W?CA?K?SL\FACGXFIIKLHP?DNFM?DSCDR_@Z?@FKI\LAB?INFRRGWBE?A\B?AMI]D??FAWAHAF@?@DTZL[SKSF?Q@TFIPLWPDNJD[B@BPOA@L@BA@MSTMDMT@EEJ?CII\E@ZE?@NS@TI??GCAQLLMAGIVRDBJ?KEPETNGJE\@KICAJDSWC@?LQMR@BMQCP?@BPQJOAXM?GSGIA??GAZV?FJUSVCEAN@MLOXVOZNDP\NDB?FHCCIPWQ@ZD?LBHM?AXF\IALM?D?@SIF@EPETE@\T?DCEI\H@B?]GWAHNIJG\?CA?GJKWBC[l@IRTYJ?G\OPAV?V?G@NFA?HNSBBK@G\RYG?TFDOFAR\JR\@@@AXAGZJWTQQQQDv@QQQQQEQQ?QEQEEEEDDDQDEEEMLLLBMOAGBB?MA???KZ]TVQB\?BIVLTAGMKCFO?@?l@TMAGKZZLYI\IIOYHESBBM?TSPPTZ]KNJN?WAOEX]LR?L?AB?M@FT?OCO?CRICLD?CFPDFXMLQIILF?JR?B@EC[K?@@CJDILXYDEEAIVZIIPA[\NDY?RHNDJJLl@?EGFCJE?I@OQWIMLHXKNIEWDDICO@KOEH?AMEARC?SAVSIPGNXFXKLRKCQL@GJQ??LG@KROMCKl@TRZS?P@ETJ@?MBEAHDMF@I?LAAJ@X[[SA[ZHTTZN@BQDTAG?K@HQLISAJJFNSQRISIQK@?OICFHGNDIIHCAE?D@MD\[SK]QRPGFDTTBNO]FI?BC??CBTVLEELPWOTSRAKBNW]CDHDQZ??QFQJNMNDIEIFFZIPSS@JGIJB??JHRAIF?@KGCXZMMNGLISZFKAACTP@?H@?[[P\A?AI??OLNHHEILLBST?BP?DDXMG?WKXYP?BE@GOKCXMI@PSLAKJCHS?BHSIODCWDOZLCW?\LFGB?LOIILFS\EEDF?KPKA?B[EDVDH@VFOWILJSX?Q[LDDNHDDFLCMK?RA@?FA?VLNSIKEXSXILGFGBVB?SPJLIMA@?YHKOL@MSOI\SN?]??IHBI?SINI@BANHNABD@BHFGPIX\ETBTv@WHJLDBPFT?SCDGMHMOLBG@RIC\VTL@PAOLHMZLG]AJFCNE@ABQP[BZQR@GVECGDOCD?PO@FGAIJI]?FJALH\\RZDXPIILEF?L?KR?NAXGMF@@?ZOSCAGRSFXL]JH?@HL?DV]JAF\??NKJOVGPGA?\LKBTRFF?\E@YJLNY?WLASNE?L@CTF]HLL@A?EK?MB@PCY\YOJELIGGA]LSQ@MGZDLCF?QB?NFBP?KVKD\I@SL@?RVN@?@I]MLLOWDBM@@ICBMQDSJRFGBDJRCJEVC\ASSRQIMPLG?DI?V?VDGEA?G@@CGNSQIECVKPWZ?HQFY?ILIR?GKK?EHEHNU??C[VQIIB?@IHDK\MIXTLKZF?JD@TBNBGCSRPIJZCB?B\KIWCA@JBRFFKFS?EJL]]@]CXIT?@?GD?MASYJ?WH?@KZA_@XHRAR?NN\SLQL?PF@HEMT?INHOBOABFXKAKKPDTVAQDZERCHN@E[ILJW?AJ??]P?ZCHSE@BXTEBMIRF\DGRPLF?N?AEVSZNFNNRDGA\T??ZCBEEQLFYEGKDFC?ZPDEP\L?JYTTAITZKGD[?Y?E?L?OBCEWWLDE?TDHLACAT]PIHJQARSOB\?CGHBSZAHAELHXSZBTHAAFCECAISFLNWYH\GK?\EIM]HZXNHLTZKP@?NCBBILA_@@[BHFNLLAL?Z@[LIGCC@ZGH?K??\LTIDF@M?PCJX?LLGBKNLZGHCWBWLMHITIBC?LJSLQQQQQQQQQQQ?QQEEQEEEEE?EDDQDEEEEO@CCGN?HG??GAKBBC]\WBIIIAXIXZ@A@GBFD@?HNGAEBHLXEYLWLZ?YLIQTLRIDAGC?A@AMOA?JAACSXPIQIHPAIAPNWGDEDAMBO?E?BYBFTLYTLY]YGZQLJM?@?ECCEDAT?LWVKA?HQPAZWI\D?GKHCBI@TJFKJKEEO?VR]XCL]ZLXPQVL?GBEDSDS?@DCBDDTAHHPLZTTSDRTBDBHZEt@?DQJ?]F@FODHFSVLIW]?TOLLPBMFLOFL@KZ?NAMDV?GFC?@T[ZQNIQN?G?I@OBFIF?LITLNBE?@RINTIZBMTMMWA@IDG?SWDHBLAHR?SQI?[BGAGA?DBT?I[NDA?TMARPAENZHYPHZ\PNSP\NOBO?TGXJAABRF?RABFS]YJSAYMC@@IVKFDTT@V?B]FHHFP@A\?NCXGVIIPTX??@O@RLWB?PXLIAF?BT?O?W?CCKLQ?HOVSSQLNBEWLAJABV@BB\OGMPLTEW[D[TPCADZCGJSR\DBGGV?EXC?JGRP[DIL?N?NA[?HPTMGBCMHJLI?@PARI\VIF\?VT?KFGIN??]?VQCE?@AI?CIJRL?[OAI\HBNZF??P?R]F?MX?GJTMFMMRZVX\LT]@WSAFC@AQAX?BDK?K@]IFM@VJ@]DMBSPHV[OAIT?HDIDN[CI?X?BB]GROG?XWO@\TJ?@M?L@X\S?AF\IJ\KKHZELD?BETPCADSDXSZ???[\LIG_@HMQ?OXHZZBJDI@SLTBJFJ[AQKCEAEWTPSSNQBE?PSLAK?[@LE]PIHV@DZLFA???l@]DMH@HLIR\PY@JLTK?T[?BIPNKA???CESB?PRRCFFGFQLPIJ?GOIVALLHORG@NGFNRLAMIVWKY?I]BB?FSJSMSID@KGKAB?L@ZXZIDHFHQIDBTFJ@CLGTITORERBHJCLSIBTDRE?DGIKGQKAD?LOQ?H@ZL]MZD[?SLKIECCCSM?QDZIFOGMS?PZG?FLKFBPG?AHIEPALSKI]OEIMQL[??JNB?]@NFHFY?@WIS?FT]ST?KAOTAOIW?QOHO?KLB@??I\?\IDM@[FNLGASIEM?NDRPMJFDPQOILK?LTHA?QF?K?G[X\GQFPDOMFL@JBTIQJBT@APJKDIHNYPLH?H@WK\CHTE?]ALIIOGXKI][???C?ITZC?CEBNILHHLLCIBQ?@LC@LHIBDWEFGCV@BBIAT?CS[P\EI?CIDLIICTNHB@BAVTBZAXA?V?]DI?FWQ@SDCMF?MPW[FT?GHB[XECDG?H\LTLRDLITAKR@[@?MNDJ@RGICADFZ@NYD?RQZVQDDIL?_@H?VAHB@DNXK?HYTSPGD]LVFBHSZLMUPHRA@FH@DLB?YKGLZJYIAMEQ\LE@B?CF\CI?GCKZTFVRJR@NSGL?WY]XIWOT@BOB?JOJHCAAA[BMXPCLPIZO?AXWENC?LICDIBTBKEA?IGRFSQFGSM?TQTQQEQEEQEEEETQEQEELDEQQQQDDEESB@BEBAAFCFD?CLDWLAIXSE@BS[LVK@A@IIRIPQ]C?B?B?@KMCY[\LLQ@JGPHISKG]?DE[?B??OODHNLTIRWRK]KZYRLN\YIGFCIVMO?EAGMt@C?AIVPLYNETAJIBVRFLOZ@K?N?M??ESTJI][QLW\VQCAEYBCGA?[I?IIRP[NFEGIFQIIKHHNMSEF@EBKPWIOPO]YL\JSMTNAT\IEY?W?D?PPMBHDHG?BSJHNJ[JGQ@?[TIQ?D?DVDQX@\LWQRPAG?NDQHKJJ?LPO]XLCI?@Z?AIL?AGB?ADFLIK??[RBKG[VSKIFTQS\]O?RO?AJB@?OCOREGV??GI\[ELIVBWMPGW]?ORBNEGI@APPPOAB]TBZ]CKUOL@ZJ\ALOI[?ALB?GEXLGBS@BFLS?OHGE\RNESS[QCT@GOR\RIOFPZCF@EXFIGDJS?H?INFPLDE?ZI?IL]DLGTJCSPL@W@?DI?]JX?GA@@BDFYSU]?LLN\]?A@AV?FAROC[[MBJP?GHJt@V\W\[ISQNSFKEIAY@\A??I?HL?GLK?HHWL?MSNT]HVBKZP?TNQKEJ]IM\?B?CWB[LRA?KBIF@FICLQSKCDTGID@C@A]PYHB[DI?BOZV?IAP?]RE?DLMPHWGF\HLNOG?IYLCY??T?ERPJLZ?KYAESF@MR?WLD]@VIEVJSDPPHBOXIHBOF?SZ]PMIMH@KOMISYICT?TD?SOWJEYODPQ?X?Y@O]AJRBZL]\KIL?ACKPKFFVP?QRA@?LGBKW??R?Gv@AHIH\W?[ZHYPLIVIBFIILAJ@MABHLFL@E?CCAX?R\OYLWON]?QNNFYA?^??]BG[HE[AER]TAYRS?OWIDIV@@CB@BCDHITJHWQO?YXIVHLSPHA\BN?LSUXLB?H?WFKINJLXG?FEOIDW]KIRTFDYLGBCP?ISMD[?RN?AOLN?IMCYODILJY]GPKD?A[Z\II?LTDBONJOEBJNQPFVVWCYBWFYBNZ\PQIGD?GASNWB@??D?C?LW]W?N]T?HWVC@ICIOWCO@HVDFKNvAQ@J\PYIC\?BGLAPNIO@@KNB?P_@JILF?LIXVP[CZBF]R?J?ZFLHAND?JA?LQNZ@TILOPRQOGAMCBTLZAYOM?MTHwADA[P?[RVVQA?]EMB??BNQRVDQRwA?ALKA?I??YPEM?IST@HMIJ?LSCIIV@CI?FMMU?\OP[YITEKDH@?CLH?RW]FF]S?@LO?AL@KCBIVLHS?FB\DOCYXWX\@CKA@J]BI?AHTRAG@PX?SX?@KBLDRPWFTDSGAFHO@@QN]LB?TF[DPG?DS]LYPT@\AJ?INDMIYOKDOATXLCMAFMGRLQTNRLT@?G@BKLXEI]C?@DLTQ\ZE@B_@RI@ELL[YGGOPFAHW@OMRJv@[GIIH?I@\?CAZP]?W]O?D?ZQ@KA?FFLIYQP\?KNIWIZCHGLLA??H]S?CPOIMA\AJIL@HX\HRDAVFA\[DCBBJO\WKLWHJLSK@AQ]RDRP@GVF@ALARHIJ?KBWFVCCQTDQQQQQQQEEQQQEE?EEEEQDQv@DEEDQQOCCDGOJB?NGNZRTTYR@?AZDZIRN@PITI]ZMJDBCFMXADDD??ZETIBQARY\T\CY?[?J@XCXSl@?XQH\DBGPADSEPSSSBSJ]CZ@A?KDX@?B@\AF@IZ[IP??FPAOLEQIZKL]?ZXN@HDN\EMA?MGPWR[ZILT?OGFCYSD@PJAIDYSQLEABH\?FMPS[JVZB?DE]AEY\CA?LE???FZHABHZP[ST]PRIL?KTAAFNI?@VLW_@LJBBFK]DY\RPI??YBt@BGT?HSVD?R@RXBIHFQLBDZWKVQLLRBJTHOB@GCAKEABB?HQ]I@[@TOPSVLTJLY?SQICAGJL??TKFGMMXDIIJFIDS\SR@L@GAQQD]L?]BVCOHKOT?@IRA@YAP]ISB?SBIGE?A@L?VJCCH\H[?LCZOIZQIS?ICETNIEPNIFADGZOIC?[FDMLJAYRLAQ]IOPBIIVICKWAH?FJ?\IDJQLHEDRTXLIMBPIFAIBTA?[FAFA?ISMLTNTDHLS?FBTLMXI@YB?SSD]I?TNGGFWB?L?NPSZDDA]I@?FVFQ@IFSILGTBIMQOTEIVGP?\@VAE@HA@_@FIGPMCTIWWYY?TCZ@BRL]BGaBIMATFBMTBAL?GOOTCG?TCQVHL[?AORMLIX]DH??RA?LEVGEF]PFD[??VRFBP?ES?LNFMCLNVCAIR?I\MZVHG?BIYGL?S[N?PM\@?@C?C\NNQAYCFVVl@?ZLGPEVE?IWKLPBQD]OEYG\CDF?CA@QSQC?PLANR?KZF?STDGFJPOHMRSL??M]ERYP?WFPAQ?F@QMIHII@JMKTADIEN?XZI?ITIBSJAIFRIN?I?@PNP@WS??H[@LLNEINP?@ALETBE?PS_@AFNPJTI?IKPPFLRF\OGIKJJMTGLCNIZBPOC@JPGILJSWF@PPEITKCEV?ANLZIP?IRHl@HIDPMWNBBSGNSLEFHBRD[PIJRVLTNM?RCZALIKDSQCFJ]K?WLN?JFRNAZAMILMY@PMILKQWYAJ?YTG]GBKIC?@I@BBQARLQFPK?P@AQ?[@@CFNFSCL?IHDAI[]SYVVCI?GF\F@BI?VLDRNEDEEB?@YILTR@N?TJ\QYLAPEQD]It@PGRPA?BN?BMHLDQTCSGH?QC?VJWSYJL\VIRAF?M@LD?GAKPLSBCIIQCREFR@ML\?MDKZD?OMPIDKEGLL]S]AA]LTCBLQFDDGPLJS?HGENBYXAMZXQF\FSHMA\ICIDGBFLLLH?K?MZRQLJQRVJQR?JIHIN?@AMJB@ILSK?JDIVSPL\RVWT?IFLFJDCABOFJIAVHI@A?SYENA\II@VRQDLOC@GQTL??TS??ALD?GSJLLE\?BWT?VQHD\KKGFCN@S?CPBSPS@DSLG?SIMPS@C?W?RQ]BGTG@LD?Cl@@POWI?CDM?PNTHNLTT@VG[QEBSYHR\?CHLGLW?MA@B]O@@AP[?FEBLGQWH?VX\PPVCCSHW?BC@R@F?H]GNWTC?ED?IQWPMSQXEWECGN@YSRZFAEN??SICNGLEDSLIQ?R\??G[PBKGI@JFD@KPKJJQTPLLXGHPQZTDQQQQQQQQQQQDQQQBEBEEQEEEDDEEEEELBJCHNDF?\FQ[Q[EKAL@]TPVH?JVX[TSLFXOBK@KANHM?@L?ICILXOA@[IXGD?RCIPISS]HU@HN?JELZLIBGASABHWTPD@?PTRACH@XVRIJYJGVGI]]HPEA?NKGIBQLPOGOWI[?NHEH?C@SVR?HWSXN?]OLROFP\IBIJ?C[AC@LCH@TZKTLF\H?K?PLSXIR[WADBLTA[ABOA?AJKXPI??RGESNPSSQHFCI][SMPI[K?C?JHB@PELHWBI\M\CZSHLLDCHROHJO@JDSYDDCDI]LRZSWNZA?]SICVDK]MRJSC@D?CCB?RQFV\PPWXLYVG?YYOC@XAQ?RJ?T?AMJF?CCSXLWHEJA?QVQXIICRLRPK@BRCGOK[BDIL]@\?AGGFHDVCNYBBRQXTTOZ?RPDRMKADIPN??[SAJF?ORRKQHEZHFKEN?HBVWW]?OI]IIQXREDM?KM?ORSG?YNLJEB??RQ?CYLISQQ?TL?D?O[EII?KI[Y@JKDUICHEYRV\?LF_@ARJAECl@LQ]@CZCWW\?Q?KHW\TIOAXHYAF[E?BAW??D@]A\JDIULQL@IIL[RTCBIL?OJICE?BSMFSRXAt@BDICBIPNPSCVAIMLOLXVNHDKAHFLW@?KPIAP?FW]ICLJL?AOLT@?CWEEDQITCON[@DHEPP[LRBZEMT?V?HTP?CFD?AMJCLAMYP?NIZZVWB@GXXQLD?TBR?LK?F?@]C[FNDZ?ZIQJL?NGZB\ICZTEEDYSKAK?BVIL?VJQ]MLL?HMMDDPSTHRN?BYWKJQJWOBRKRQGQKL]NS?OMBGFFRI?SMCBATGR]G?LGLQLTKCIRPRKWC?AP@HRTICJNBDT?DTA@KQ]KDTO[SSY\AK?@BQDILJFVH\H[PO?@@GOVFVLZIWB@PC?GQITDC]IXDUPCBDGW?ORHQ\AKLOSGRFPQOBRHIBVLNPCFAOLREV?JHXL@AEISBWAQZT]WKLCH@T?AMT\?ABQLOI?Q_@?CL@GZRZQILIBIAMFKJBEVl@FX@CGNWDLMIF@IVS\TILGQQN?DGOLOLNCSZGCI?[BEAKLK[QIIXCP@SK?MHKDF]?VLLBOBVYHOPG?LEPCIW\CK??DALP@KIRASHZ?@PCRJCLXTMDTBXI@@S@[@PNGAQMAFILRDVKFL\QARDAEATQIJJIO@MZHIl@CIP?BLZ@B[\N?@@R]ERLIJZJPEYZSCBQ??GLSDLKASASU?SJCASSCIPPVCXTN@HIED?MITANH[E\?LEFz@iBTLQj@dAe@cAr@{@c@a@e@|@c@q@b@i@x@h@r@?b@{@c@a@e@`@g@e@i@x@h@r@p@`@h@r@p@`@h@r@a@i@x@h@r@p@`@h@r@p@`@h@r@p@`@h@r@`@a@i@x@h@r@p@`@h@r@p@`@h@r@p@`@h@r@p@`@h@r@p@GKIZOP\HLABW]@NBRGU?YBDXL?NTPCQFD?LQJLQJLHCSHIYMM@ZVM@Q?CP?MTYCFHX??ILCJRTEVGW[N?AAVEFTZFIKXT[TGl@H?SLAECTZ?LBCT?MUIOGTYPHGODWRSE?TLBLLMEESR?R???QEGCFCH?SQLSRSLRPBSFMAVFPISEQ@MA?R?P?ABGAIDQQDL\AMYI\JLECJY[ENt@P?CG@OLFRSFFLY]BOCBFPRL[LHMLGN?A\LMJOGLP?@NOI\X]CXXDWSIJCACN[HPSUQ\KDD?EPROIWDXR[@??ID[@?[BIGGRL?BH\K?A?RS@LQQQQQQ?QQQQDQQTQEQEEEEEDDEEEEEEZOA@GDNDBCV@ZI][RHPKYDVCIBGT@ZLXQQCROBAMDM?BHHASRLZ@\]AVQANL?QXIQQSPA?NC?ICF?@@FIT[LGQBLZQLB?Zl@J?TQVS@J[Fl@@RMOCMEPWJLTZM\QMRVETB@@?D?FCQRQW?@DL@?SPYEB@QQLYLSORV@ICBC?JBHCM?EXJRQI[X\SZT[F?PCHYRVKVAAP@NCGJ?AMCFYPLS?IQQPXJFLM@L[RPSD?RF?CJJVNHJ?HRGVIIMGIVTYBV@P[R[XHHTGCFGCK?SK??YCTCSLTFOQXNR\?Q?\RCPTLKFW??F?J?DILZFRT@C?MYSZMQJZKSG@HX\CVR@WHHFPYKJQY?SERIKME\?APZIM??BM?AL?\RBLT?P[CXCDPNQ\?G@GJIV?BL[ZGHDB\D?GTT\RPFRADTYG]?JCK[A\NLBL]J@H?KQBSO@ICW?AGQXX?[ITGBAXILSB[]G?F]OGHDIHS?LM@ALNLXTIV@YTDIK\l@L]C?AY?HLFRGA@?CVBWHLDASJFLIKWLLHWYT[P?RO?ALKSv@RA?RGI@B@QFLHKANDLTTI@RLT[BFL?LBLBB@YGJMICQEGXFE?LIKNXY[ZAP?P?IBRQ[KLNBFITJ@GBLBBFOPPNINDPCQEHL]SRLXHLQ@FQ@PIF?H?@FFM?PP?AFPHLYPTPESSOIPLHIIHGOYA?D?HOAC]PB?O\RGLFTIQJ?YIJITH[DL@BEMOBJLY@A?X]CIXRREBID\KQ[IOJDHOFBELIFRJ?GCHXP@VZ\]Z?ROTJ[O?AI]O?GBCCDN?THF[I\DRT]LPDLO[?HABLOSSFKJ?A?G]SD?K\WLPLQTLLIBF?WJ?J?F[MFLJKINRPI??H]IZQPI@TMWK?ZI?FBE@DA?@EYAZGVPKHWL]]YINAASBB?XI@TGB?KM]J?IIFBXATE?ZY]Q\CRBYOC?AHYFR@?MTCHZTZYAIBKYDRYPP]PC@FKNHABEBQAP@OW\CVRGJHWRHIRZHLNP@?K?IBTF???C\SGVLIIKWDGFTW[IKCGSSL?EBOF?MCWDLZY?]@IPJPBRWTFZ??WWAI??A?S?@D?E?ZAILTL@LG?WQLTV??BTACVWGSMHOWI?KPCDROXFIBKXIOSDCYEJI?\VVMFE@GLIHOPZ?PWE@SAA@@KIB?ARXB[WL\RHK?PFEEHQXWIHBWYT?MHH@LBHD[IPLP\AFJ\CA?V?V\A?Z\C?D?LADEALMTLISQEZ[AIEZZKDTZJDRS?DDLHHFAXBHGYL@EXTM?THQQLIWOMCF]@?YGCA?P[MFZ?SGLIFJT?DRXIJG?LODO]HTQIBAELYHP?[I?SKRNDIOTIB?BPXD@B]?ERCMVKPSPXEFNARA[I?GIVEVEL]INFRANDOLR[ON[NE[SYM@AKINVPNLGVEA\?]?IW?ATC[HBRL@?ABBBLRIXX?[@T@VPGIEH\Gv@MPXLFVKAYK?@IL@LGAZCY]QJIKBBTDNR\AT?]AY@?SADPHD?IYALSV??LIYP?J?BC@[?\PA@DTEB\GDNALAMLVPIWZPX@?OVSTONGVTC@K@B?LSTE?LAPIITY?A?PF@LATBL?MFSRF?XE?MICQLCLG]RI?[QMEQQQQEQQHQQTEDQQQQQDDEEEEEEEE???M@ADMA?]PFLRLPRPYBPD?W?R_@PW[[JMHLBG?@E???\ITW@YYS?IFFBCO@@IQIPISPWK@JAB@COAYLWSHRNV][J\EAINLNIF\XIP@J@EBGI??LPRI@ATLLK?D@FCDIY[HPLVYLAH?BFJAAI]TIJPSIW?GJALRC?T@V]NIBOQTGF@BIZLI?XFIIJR?Y?QEK?WSHPEO??SBH?[PALHGIIIBJLLZLDJPJB?DII?CSMGENFVAIQBTBWCWIZ]?OLWG@XBI??XNAP@F@QM?D]Y]TPHLSIQCGBWQ@?S?OP@KV?EGGX?KPDILRRHI[FKCQLQFL?MGTCP@YKDC@[?YKE?HNI\QISSIQSKL[QBNQHA[QMAGKBAG@\K?BWZIYBIRETIE?R?SMIIGKIM?TDJ?IG?NTTIVG?CATARIAXPP?JCKI?DMTHB]FBIYCFLSINETQ?S?]IPCvAB?G?KNGPKCKYLLIN?I?M]ICJXSSQ?\DLG[MMOJTFOYPHCI[SGFLKSDIRIF[JA@[QNML?]?M@?LTST[\TOO?OIHIBT@QI@HVG?WB@MFTEEL@CBZQI[IIL??I@KDYYDBHXWJ?C?IOF@B@VLR@PQWICEXXPIM]LADNIDHVFJ?BGF?HPIL]EXTYAJZV?QI\SFM?CBMP@?DMSE?@MOWIXPZHLY?@PSIHPFWRNBA\?OFODHGPBRRALPLL]E?ESWIIIOE\IJV?EAFDFGF@MFCXLLRFW?LQ@OITP\IQIMA?W?CEPJBH@CISI??Z?QIIFFAIQXX?ATXLIHC?MH]LNDDTRINOP@LG?]CIPAY[PEPAQAAEKIC@GAY\EZIHMNIZP?B@BTXIDLS?NTWG?DCVD@?OI?LVIQFX]RHHPMHIII@OBHCSMSQ?BR?XPRBIBQ?QZWADEDY?IGTDONA\MZMFFTLZNI]SKIVJCLRLCLA?KIMGQ?JQ?ZRBGJHIMTL[LP?@X[?B[KFPFIBJXHA@ELPHJS?HYSRXM@FPDIQWHY]ROH]CIHMGJ?LHJOCLIRMVCLP?VATRXJPWZCNI?KRCDA\BMFKZSIF@AI[??DYWTWS\LQAJ?G?CI@KGW@ZLMEIVCBVFMI\IILS[RAEBTYJI?@E?HAILIF@EFIBNRDZLXAIX[l@OPQGHHRAIGGD@?CRTESLD[G@CZP\NLF?DIQGLC\QAIGGEKG\QTCYC]CG[]L?DEIRHCQWIOLMSEI?@KDIE\CVMl@IGWVNKF\AX?NGHTWYLOVWTIAPFTP?@]DWAMSTH?l@MBCI@CVD@P?PNTMQI]ZRHSXIBROIK?HKINJMYTED@SEOOJYPXLISL@PW@IM?ZNLLGBMLEYPDFJGA@LFI\ICSWI??HBTTAIVN\]XAHIMS?CGGHGCRZ?IEV?LQ[[LVKY@M?RZROFWOE@NQLG??ZDMIL?[]GR?]V?LWHQL?SHNIQJSHG@A?ZBLJ?ISCV[A?@ICLBCIXA\YLK]EFYAt@CYTZY?IBG??]T?GXX@PFMICQIPWBLBOPWNALAIKIX@?MBIEWCGMQ]FAV@HSIVWIJNLFFTEBT?IOLO@QOPPNRBHK@TLJLCTTQLT?AZMRGD?IPH@CDPFMISEYPK@BXSRIVS?IF]DKACEIIIUDQQQTQBIAQQQQEEEQTDEQEQQDEEDEDEL@Y?JC@F@FTG?AL]WLNYLYYCWEIILCPBQCI]?BC?@@LFADRTRAXOEY@YD?LF?]PRRYSPIMXFC?M@ZGBJX\LP?OFYQEHPHRGQ[ILWS?PNBBDCAOMWOIWYLNVQOGPOMPJTLXXQT?LJCSGD?A??SPIV?LVDv@ALHAGVFLIYIVSH[EC?GWCOG?LPRIVREL?LBBNAKVDPSSY]?VDMK?Q[LBO]KIIOL?PNBPv@FIF@G]L?QPIMWO@AQRPHJHCTLV[XCHDPMFCFZ???YFVBA]YJ\SQIFBLP\JTKLX??MLECNWFB?A]HW?]TILSIPMOS[LH@FGX[N?PDC?GXCDCNXBILI?L?YA]?RLVQCD\PBDPM?@??l@@WM@PAHLIIXXGHFISIRP?]ZWDPHGDNH?@EP?MOLBQBIIJEYLSZ]]ZXFKTHD?P??MOPGO@DLNEWIIHOCQQ@[\]WISWD?I@L@DDARG??EGKILGSIIOFLL\R]Pl@VFPP@@\MH?DOKSAI?BE?XIIBOJSIZCISBRXPPQEDG?RDDF@TZFNND[II?FJQZCXDYGAP@\GVVWI?J[NKFH@SA?IIIJGCPIH\@IKv@EZ]JPILWCMGAJXQB?X?]II@TROBZ?GIQAEZJ@AC[@Y\QBYRCNTBWAYIIB]IDMLCIFK?ZOA?KIGIXCWSBILI@APIIIHL]CAJPVBFDJOZNE?KP@AS?L]Q\l@SIKOYTZTTGLD?LCJ?Z??BBDEYWS?M]ITLS@LEJR[ZSBFDLR?@l@\M?@M@?@[X@TCRW?V]Q?ILMIPGNCPMP?G??@ZJ?FJRV@l@FQ[I[ILWVRP\??H[LGYBZCHKBJDF?FLZMD\V@KXPLIKVLKRNILICA]C??BNH?CHNBQP?LIQSVRAKYEPRIIMNRKMOPH?JHEIFALA?BLYQV?S?WILNRDIXMK?IHGPIDHJZ?AP]IALK?PW@YILK@?MPPFFCJHVBYLAND?TIIXQE?HILVJPICLA?HGFQ[JWGAIS@NMCLI?HIPIC]PHKPZ@FY@MGOKLEISLIMK@LDVNSWIVG?BISDCJPM?WJ?T?A\@I]]MDIBF[?MTIZ[PAOY[CLNKEXMGI@CITAGI]TOF@AAPEVIPRB?PPP@BW??@FAAX?I??TELMQIFYINLRPEAEIIPSBCJMMCHHG?IV?LAR?YPLPPIC?PLJ[I@XCZMDONDAHHBIBQESFLCLIYVLQMKX]HQX?I???FTDBHKDIWT@PB]LIIBJFWPSl@FIEINIOD@@AKL?ELL@HMDPIDIXIIDRG]P[PGCI?C??AC@M[??QP?TA?IJIYIOXLWOGYLYC?IF?OKCMPA?CJSLPSIAA?SA?\SRE[S[WCI??B?E@VE?AGXLMTWIFJ@WVIC@ILLLNLITKMHPFHEG[BELCDL@SV@TLEIVO?P[P@NCFNRF\LFVBML@PTB?ZZW@S[LHAH@QPMNLC?DOAIRV[I?OIBQGPSTCMH][ROFGHPA[?C?[@NHHISQLPI?@ORZLHFADLMI?VP@DJCW?PFPHZJI[\PAITV?@IQRFLY?CBB@?ALD?GML?RTPQHLQFXX@N\I@EPSGDXHFN??OL?AXLPLt@YIMCIOSRPLRIBAMSCEPG??APMBJ]B\P@CAIVHQSZLLI@]NAV@Q?@L@DQv@QQQQQJQQQDQQQQQQEEEEEEDv@DEDED?AENN@G?EH]PRLLOIEV[IBKRZP@LPQHMNIBFMGDHAKOSRZS[WSY@@KW\IYTIHJ?F?@FRMJ?DBM@BIISR[TLSGNIHQ@]W]XT@KNMGLHMGAB@@ABLQ\DZLWLP\EAQIYLLV]BNDDT@AJH@@?GF@TL[SLYBWJEKPRRLIX]TGIKSK@KBCGAAK?LTL@I]PVFFKVPWDXILNQRYY?N@??HJO@@[DZ[BTA[?V@Z?I?WIPPPI?QCPNDBK??ND?IILITI?GFVL@?P@VILRI?QMWOABGJ?MYNHTQDL[]NMKKNZLPXSL[QCO\I?F@DCF?S@BZI\MW@SJYDE\SLTLYR]BCP?BG[OO?JF?XLYGQSPLDCQHYKTILZ?\BWG@A?XF@BKEVEIWB@IXVERBVK]RLIHMINEXM?]AFGNCIMYYFPGIQSO?@BTDABKPRIITEASHDL?AY@I?PGIMP]TL@BKSA??NORNAYQYITVBD[XDBSSY?XHWIL?B?A?IJD?[KI@]YHQA\XIODAYBIA]XNILIAOJQ?J?CRNVK\P?F]E[IHKLWVQ[FDXALPRGHCRJASBLMAW@API@XOOMO[IPYPAX\PBICDBF[EIAFOGZ?CCLCT@X]N@QYPP\WW]MQLK@OS?HYJGCDSC@MOC?LQPPGQPHY]QI[A?RGHJJIHVJI\HNA@WMXIDPIHRRVSIBWBFCBL@FCNSTHJS?HFYAKIWYLPSWRIL?FHQ?BTBI?EFDBSIVY??PNEJTLRAR]OIXY@@LX@@FBIAGFV@TLHB@CWCGFLJL?TSQZQIIHTLKB?FIRJ?YIRCFQN?E@C\QKGVIXDIN[X@DM[?KTWS\QHPP\UKHHDKOYINNTXCI?[IXFV@]BYHSZXSHLI???MNMRXFJI@JITW?IMQDSHLKIIP]B[PN\FOGGCASCYLCL?JVEVZYNIJIFALVHIOPI?]BAJDIHIO?H\GYFFLPI@LYCWFM[VABQOTIQAKBL?Z?@I?KH@?P]JISF]AYF[RP@LJLTYBIZFSCDAKG]J?FEYIVWYOXBXA?LLD[\WPOICVAFXI?E?T??NALOV?L?LQBZILAYGCWSFLICRE?@]??L@?REXNCRTA?L]TM?TIAS]ZA?DSISCBH?RBPDML@IXYOFIX?LHQ?PTEGQDLIALIOFGAVB?[KBW\OWSCI\@IJWXWHDTPHZRBIEAGGIFKBLFFID@X~W]YUBLSQKKS[BP]DL?HI@M]??MCFQ?CZICPP]PI?@?UVZWVFEOQBJNMIS??CLECMWRBPIILRT?EF@\PXZ[HACC?GPWIZMDMQ@?MS[STPC]OYTMO?L?\GQDS???SXSGLHBED@?\XHIPWYIRLHDXB\PID_@JKJLPTKOFR@ADABSI@?ITP[M[QA?LL@SLRI?P@FOMRNANLFG]ATLSGIIT\EIFYK\LQCGT@R@CKRKR?OJGHAIYMBLLYFTMU[@R@\PLMO[LCT??FLMRN]ELEH\XIJYDPW?H?FHMQOJTLEWPF]CKQ@GIIFZY?]BB]GOLGIIJE[[BOIQBVFIGFDFYHRTDQSKBRFGBDLW@RRSN?AB@ILSPY?MBXPAZXRN?GCTCHBD\AY?HX]@AYZWIIMC@A[PIVAR[O?SA@H?HQAJPPEIEEI?QCQLGW[BLIPALT@LB?EGJF?[CTQQQv@QQQDEQQQQv@QEQQEEEDDQDEEDEEEB@C?BD?BH][ISLQLIAS]\\YTR[AMAGJC@L@BMGGBDY\ZGW@LLHQF?ZLPTLQICA@BMGHPJGUH?IFDLPTIVL?@\TKI\I?TPVHHFEDKLD?@@?CGECPLPT[PQNWPHMXD\STZ]BBQHPNC?KD?XPIIIT?MWBMODPK\TLTVLEC@WSCBPB?CFEYSX]LSXNFOEGNLM\QSAM?ZHX[GCXKBBCDVRYSPTRWFGDI?MZ?ZA[P?R[TGFGCMLJ@DEC?I\RTDRZIAH@]]PYLW?WP@BMDLAA@I@MRISZQSFEQGG?SMSLPM?VISFCVLDLBKH?HGFEP?]FX]IOGSA[AHIILPIVA?]LAPINFAGBJISV\NQABKNS?NQOZWHPRKC@XPB]PJF@CDYVWJPPKLNDWT?Z?RXGATB@EIBGLC?KHR\?FPLRP?RXGTCLFP@KF\\KTNFN]PN[OV?GDHMLI@L\H[ASEV?LE\B?MTPPTHA?TBMCFQETL?WTNPC?TRl@I?NSB\HATPSP?WGGE[A??LV]\F\C?BJQRH@YN?@[DLRIICC?SJDI?]LIICV\BLBN@]HRI?J?KYKL?PRTEZI@PLCT@LVTGQFF@NM\?CRLT??YFP\XNDLIDPPLFPWABALIHVCFB?L?PF]IKQPLHl@L@IFJPHW]]@\KEKVLCBFMELV?XJVTIPIKSBJASIARS?KV?MPSJBRDIKD?ITFCL?TVIGQETEMGI?ISZW[E?YL?RCZCl@?BRJPWFZ@IZCB@MVA?L?ZACIP[TLBF@NGRKYA?BIIPL]EG@?]FA?LTMWBIMXWWYGBQEOIZ@PIGL[IBBNKELl@LPGDWZLNOTXDKI?E\[LBP?ILTBAWFMD?L@SI?A?XLRCHD?NRIRPILJ]IGLB]H@G?WICYJBS?ASBIF_@QL@P[LGI@YGJSLFBMLFRVL@SO?@IWZ?IXSFGCPOZCIRFWCY@P?O@I?CDZT?BQTTEVCYZG?JVJFLRS[DZIKCAABQJ\NAEVLICIWILN?HBIAL?WTW?JIBX??@A\]?JBAAYLXQTRD@A\?A@LRIIP?JNILIABLO?SBMIGEIVILTRQDGTFPGILDK@JIDLL?@J?TBPFBVDQSSHLTILHOOPCI]AD?NIAOLLG?C\EBCFLDL\RT[VRGOH?MZAI@VDHLFIOLCE@KQDFR]LLQNZLTLFMPKHDQIBNRIIJLG@@D?SDBM\KSZIFQTYAJTVDSHDFS?LJ?WITCKMJSADR[VPIEIWVBD\T?M?AB?IKOPM?YIB?SPDV?I?XPQP@ISCK?IWO??KHLPCCZKCIGRINYZFTII?IN\?HSVLIA@JB@FA@]LCI[JLFI[??ZQL[GJST@FI@LTQ?FD?DMLVIRBEELEF\IM?C[BXP[OBLOPIKPE?OAt@?HIFW[SELA]XNCALKCIVVLZW@LRNHCTHJMDSDIS[XANLHRA_@CF[ATV?BXLPPB@PAAESMTZHPRWFJPHI@?@ELVGKTWIRM?PYWC?CT@CXO?G\[TGOLAX?DR?GZCWZCDSEIPWTOTPBEEGRKV[\GO?LXBQBFSLSKFCC]DS[LRTZDIFNDR?ELDSYX?NID?ID]INYHIFBQQN\]JHIOHARPK@LC[XOPGFV@KL@NIIVXIOIB]EWGM[CDJL??Q@V@WLEGV?CP@QLVM\LSW?NIZN[C?EIDC@VSJMQIJHQXQEQQQQVEEEQEEEDEEEQQEEQQDEDQQLLQ?@M@FKANDDIIRLWVRGYPOYIWLR@B[OBVSH?GH?AK@E?@EYTSYOTPY?TTXQTLMKJBMQZ@??JAFFNKPSKZSIDP\YIYBVSGB@P[@VFII?BHCA?J@GZPI]IBVPIWYGGIIALL?BQQR?\JEADHCHFOABNW[RPY?LDYPZXV?BDQLSRALKO@BOG?A?EJPXWPIDGVTQOLTXVRPPPE@IGAB?GG?GHGCVXSJI\?DV@P\ZVLMC\S@QLEIMDK?AOFF@PMIS\?SGR]YY?Pl@CR[Q\R[C@I?FC??@FCXI]J?V?TC][VBPRLPTI@ILv@DI?@M?A@??H?BXO[OLITRRLORQIRPZBVG?P[?@?GB@K\UTJMRACVMLWT[XLIKAS@GTNISPAMCHCAH\E@SD@HLBWW[SX]Q?BQ?GELN]CDIPDDL@\IDGYAFCZK[W?SZSLIBPDIMG?WOPLEV?D\?LCSKFDFMIK[RSPVI?FJVP@K\?LIKHSAB\P???@?F?IVVLWRILBAUPC?PCQA[E?P?\PM?OD?@?@]PLSLSLQML?T@PYTK@L?CNCQ\HZ@NIH?E@F]YZQSLLHZF@Z?[IAO?QCIDTZOJHL?@HYKM@LIP?QSLXI?\FHPCKAIOPZGPHLCAD?YPH]LGRITAXG@VG]QNDMF?Q]@ZEHVYAPMGLSHLL?L?LELZOMWYQFA?HGI@CH]WHSP?EIDLSWTHZPGBYSGRCIDRA@BAQBK?Y?IZPIHLNLRBIFSLQ]Mt@?BL]ATKJ?NHOIOQBIYO?LYBLZNZGEPLQCLNGWETFSFLM]Q?J@IWC@ML?RPaBYNIGXBJ?FX?@\PIHT?@IQ?L?\@Pl@P@FQICRQF\AFKM??ZVILZICJEZLHP\KQ?BLMGT]IICO]L?E@BFCVRILCHAAWLPZFTABPCBIS?PFGS@BPBMMMIL@RLJA??AXZXN\PPO??L\AZHKZ?PEA?H]RHLCN\OGHFLQTXLQ?AZCWFNREHI@\LDJSBPFS?DYH?Q\LPGCIP?WVV?REHEQANTAL@@LMWQY@QKDRXBQBMLBPWVTCSBDLJB??LKENL?RCLLRTB\AIF?LGYCLHVS?\GHID?PC?QCIATQ@ETTXZKXZLB?KLGYJJGSWBGZD@ALISYOZPKG\]KHACPZSNYGJQ@]\?ILOHTJ?\IIMHICHRZYFBPQ\It@TACBDQIFQVP@?[F]IH@VBFBPHEJ]@QLKQINKAQPKHL[G?YDPPSLBLFAWJBC?@XRPCLCEIN]PI?QA@TOQOYFLLGBSMCZH\RA?H@IXKXQFL@\HISDMF@IRSLFQHAJIEFL\OMJXLH]IGLYEQCPLPBIJFCHRPZAB\LO[\G]@HCXQIAF?IZYRADDGVNPBLDLBF?PXPNQKSHBYZRH]ZGIDH?LI??EB]KC?LL?PZST?XBF?JSZTDGS?@QBJZTJWB?GGP?JIPQI]SIKT?@\CH@YSPT?DCZFTPDIL@PMK?RLAILK?LGPOSJ]IQFJFRCl@INTDYYXGACJNKRPCQ\MCL[?\DTQIJCR??RLKDT\@SKE??GTKLE@NIPLSMIBLRC?ZBLNCDREL?\FLW?BSLOMVCHLZ[?PGCLT???_@L@ZIHQAZVZ@JMIPNB@LMHCPSDLGJEGS\Z?V]HS?]C@KBSIPBPIKTG@XF@ZDKDRHYSLSW[FPC?KTJV?FP@LXNLLCXBDQQQ@QQQQQDQQQQQQEQEECEEDEEEDEEE?GN?MKDNIRYIRTSFILISIIPV?VOC?EJ?NK?ODEJY?YTIXYWEWYPYVRLLA@MNJAAACJK\BDDABCBALIIVIZSWTTQSWTY?KOA?AGTDTD@OCADJAHL\LIJLXQ[IV?I[MQ@SFPLl@?SA?BF@NF?CN?C?P?Q[VILSIQL\X??VBK[AKGIF???H?][HLHI@L]I@ILHYVPTJBLFPAWBLGDEBJ@ORSYQPLHPF\BLSHILBCQDG?R?LXS?DHDFBMIM]IFIPOXQBRLVCTFI?NLFVALGFZF?ODLOKZRY?QLKYP[AVCQHY]l@M?GINYQDO??OCCA\?WWWRRTQIMLGBK@?S@SCQYMSRDC@HDD]KIPP?IPRI?\MIIOCDGLMS?S?L[G?A?MFVLVRPFZREWLB\@HTFFRGIX@@XSV?FMP?A?JTZK@TPLI\A[OBz@^VEa@b@`@o@~@mAx@a@|@g@e@m@a@b@`@o@m@a@b@`@o@c@w@p@|@g@m@a@b@`@o@c@w@p@a@gAw@p@a@|@g@m@a@b@`@o@c@w@p@a@|@e@`@a@|@g@m@a@b@N`@o@c@w@p@a@|@g@m@a@b@`@o@`BnALZM[UTIFBFQFEEIVAFHL\SHQBLYJW?XWQOPKBLL@EIFD?MFBHLETZB\IBZFVDLFLOBLHIQD[@LA?ZLE@F]CWFBXATQCKQ[A\BKASIHYF?GXLD[Q@NOKVJIAF?WLIHRWCA[FIA[YI]JJVEVLC?IANDBMLRR]M@DFWIIGLF]DI]H?VFLIEQZKJNM?GZFJBSLITICLH\PELY?OIR@PIYWCF?E??CBHGVF?YL@HZPLRIJWYWGYPABG]IPN?@HFwABM?TCKI[XHVPIWATPSIK\?SSFY?CRFDKJCWBA^YIB?HRY?RPNVRIYXCXBL?LSMTNDGOB?MOIZ@MWEQ?IROZLTLIQCKRP\IJ?PMHAACC@JWQKFAI[XGNIL\EQR??IZEZT?GIFFDKD?B?IPO?LGFWLZ?[E]IW]ENV??WLWFDGLMCNB]GCTZAICPTMZLVQM@YIJM[PR]NREEBO?SLSQMCl@CL?\HTQRL?HLINBWV@LTMBLID?BOFXH[?\CDTINI[YA\NYG@AISNLGS]@BFLADBA[SYF?PPBZ]TIB]IMC@LPD[B[ET??@PN@HL?BHPTBFTSWI?Y?Q@[PCI?HP]LDPBHLMVME?B]PPLI@GC?LR?JIAZLQALQ?DRCH@?]OMIGBRRO?[QDP[EYQH?\X?IIASVG?ML?BM]B?PTJBELT@PDS?I[V@LQ@YKIV@@CYH?FSN@ERICHFQIEXL@SSILVBE?S@XZHSHB?MC?\H@HNP@SH]ZPIIJQ\[CMAFBLGRLX?BBWHEAHOER?LGQ[\IF@LPIIWCZBVLJIR@C@F?LB?BPNRGNMH[OLXPEQII@CTSZAFLO@WNJGRCG?V?JLWM?\]?F]IPWLACPGXW\MR?DP?LCGKIEHKEVI?CYYRMMZDLDQD[LGTZ[GQCCAAGQH?QFIDLNRRO[BS\?@SPRWCLKPAPBEGGI@?LIY?Z?WN@TZSSQJFG?LNFLCVHI@RM@@]ZYHPBGWQASSYLFNPRO]@OJRIFWYDPDE@MSFBR?@P[IPEQLMZ?DW?GASYLNBAJP]A_@AF\JLBQSK?GLBV[P]SGJLWQ?G@@K?DLKIJ?EW?RIILF\ETS]MM?VICRPC?IOEFMABSCBD?LPL]QYOBPIGCA]?PL?LF[@Y@G??NDR[KMROMS\QI[LRBFROGSBMPFQ??INWAZILMBGLK?QINNQSPINWFBXM]?MHFSH\LSDC?]TKARHVYIICZ?GZCBIM?VC?A?XFTB[LHS?VMLQQQDQQQQEQQQQEQEQ@EEEEDDDDDQEEQK??F@?@A?BCQTPRQI]LQSLRQ[IGLOAF?CHEAWGND?AOR]YLPQI\RWW[Q@FEI@AEADOD?BHI??@OFBXTVZZZWLRI@QQl@SNIKKG??]BDGFLGBAKGSZXPO[[RLQ@LL@IIM?O?UH]T@DNB@LESO?]IXI]MI\PIGPHPDIF@?NA?]?C[??\FCGCZJPHX\LSLRR\P?EPIBHBCAYLARG@SOGAO?E]AP\]VPS?]O]IEIMCBBY[GEQI@VFARA?BYL\BTRFRRQQOQIA?CCCBYPGEJGVF?GPK@]\?\LTIZVELV[S?M?NBQGFWO]EVBVGCt@HEBZYZZMNPIWAK[?WRA@EQD\IMRD@V?P@CC@O\Z]C[ZSA@]?SIOV?Q?QXGIECFV?DMVB@P]VBKLITR?IPQ@CEIGYLJIP@@KV?RGO]GFM@LD\LBI]CPY@PLQFVT?]L?N?KNCCMS]NGPN\AR?CZHLIL]\SQ?MZRRKFEAN@BHV]BGKL?RIYZZ@CQSDVILLAGAKNOJFDH?WFOLYOLRTDIOQ\[I@VBEGXAWRGFC?TCDS?LNYAYGRCYVPLRWAHNE]D@@Q]GP?W?MFQLP?^JTGMAPPTCJPRI@]?@HJWGRPYCHW??TXB?RLAF@PLL?BITL?V?C??\LT[BFTBDDHL\?HTZZAPRSAGIAZYNCCAE\YRI?TD?B??FJQDPO[QIIRCHDBLY]A@ALBLLL@[?BG@GKSLC?BIRHIZ?PUMDZPRDP[ACT]TTM??BF?ELPWOPT]OI@SE@]?PT?XLXRMZCWHYMDCDH?TSQKCWIDBCRUHQI[\@YXBSIAIKYNDNFLDWAISHMAPOISZRB]??LIHPCX?RCC?QNEIVCCCSHLLIT?L@WJBVCJ?YP]TXZt@AJVMCLZ?HWALQCCIPHKISQ[J@J@IX?IVIB]?B?]\G@EATXTIHIBIHV?RWHGZH\PeXR?]F@@FAAT@X@M@IJPIFIAQWIJDWZDL\AEIX@BB@AHLPYCEDKPLSYCFEVMILDLSBIV\?AK@BDAZLC\QLG?[]B\TCBQDXLHRJRTL?L@E@??GRHPJP?BMALG[XTGHVMZYPS?\FZRP?DBCGSI\@KXBR@BSZQT??D]JKLLBUPILLE?GLKIZOMC\EHJ[F]QSR@YA???ZVFPITQZKEJDZOIS\GFF?WRRLVBM?QHC?LNYI@PIIK?O[NIRBJZ@IAGTBYVTC?KCP@ZRNNDYIT]BDBl@I?SP]GCCEGSYRJWADLDBC[[C\IIYDQGKX@Tl@W?Y?JKI\?S?SQKFLKJ?GL]?LQLG[Q@BAE[JQLZJPN\PO[MB?LDA@HQFLQIMWSAQTGREBSIZ?L\]WCEA?PJGA?BIANP[QOFTOEICQVT]N@K\XTZGASMMALQJZMPFWLFMCPXAH]NLPV]CYA[J?DI?PAvA?MF@TALIVVOM\VAHISIZYG?RBIBL?JLYAPHAGMGLPGPTEIWULBYILZRE?\G?FLBVNMPAMBEIBEQH?[IQIVIJILYINZAR_@P?RMDIAB?GN@IFILFOLF?SIASTWW]A?S?O]TCZGIH?TL?ZNH@K[BXULJI]LYWKP\?LAHMAQ@IH@TPTLA?LKJ?\A@ZCLF?PTFI\MQ??RDIA_@SLATPADTBT]??[R@L?TBRTZD??SAMTKOSGOCVYJXIKBVOFIW?PW@?E\VNVXwADLSBKSBBQAIW?Xv@QQQEQQDQEQQQJQQQQJQDDEQEEEEEDEEAW@@J@D@VTHTLQP]PITRLKIBSHZGNZJA?CLD?CEMBBM?@ITPRVYIZYIIBRT@?AIBEG??NKLFC@BYCLI?RT?LIINSERRLWP@HVME??O?APOJA]I[SSYYVPY?VRBPIEHL@F@H\BFAHKRNDB?SN?PIVTAQLILL\VTA[HJHAA?RBB?EE@H?OIOPWRLE]IRIQIIQVFLAJO?IN?IG?GDDHCl@OXTSZTISQSYRP\TOD@?C\NKQ?BKMJCBBGFOYWLTP\IX\ILI\F?CGHCRDEMIONN@CFJF?TXVQX]TRZLL[SIMKMDIK?KY]JGGDJAA?AM]TTQLIWTR]VMV@???Z??A?IM?QJ@AO?A@WIRWR]PYLOZLLTC?TPNNJGYBGF[?Dt@?@KSPTHL?LS]VPPRCNMPD?I]JI@WKBMA@FNCG?IXNSPPWIIHIIQ?NTGCCV]KNIINNK?JCDBICXQL[PYWPFVTDMSHO?KTZSALSHCEKEOMCLYOIL[ZVGL]G?Gl@LWNKT\FGX@GRHOE@?KLRHYYQLEITLDAVAL@DIPDNWYM\?C?G@?H^^A^B^C^D^E^F^G^H^I^JnCBdFDoCFgFHhFJqCCeFE^K^L^M^N^O^P^Q^R^S^T^U^V^W^X^Y^Z^[^\^]^^^_@^`@^a@^b@^c@^d@^e@^f@^g@^h@^i@^j@^k@^l@^m@^n@^o@^p@^q@^r@^s@^t@^u@^v@lBDoCKjFMlFOrCQnFSoFUpFWqFYrF[sF]tF_@uFa@vFc@xFe@zFg@|Fw@^x@^y@^z@^{@^|@^}@`GEfFGpCIsCFiFIhGGgGJsCK^~@^_A^`A^aA^bA^cA^dA^eA^fA^gA^hA^iA^jA^kA^lA^mA^nAiGHxCIvGJnB~@jG`AlGbAtCdAoGfAqGhAuCjAsGlAuGnAwG_AkGaAmGcAnGeApGgArGiAvCkAtGmA^oA^pA^qA^rA^sA^tA^uA^vA^wA^xA^yA^zA^{AnBLkFNmFP^|A^}A^~A^_B^`B^aB^bB^cB^dBqCeB^fB^gB^hB^iB^jB^kB^lB^mB^nB^oBhHfBiHhB_DgBjHiBzCpB^qB^rB`DqBnBsB^tB^uB^vBpBpA~GrA`HtAbHvA{CxAeHzAkHkBlHwB^xB^yB^zBpB{B^|B^}B^~B^_C^`CzC`AxGcA^aC^bC^cC`DdC^eCoHhBtAfC^gC^hC^iC^jC^kCbDaAzGaC~HcCzAlC^mCgHdBuHqA_HsAaHuAcHwAdHyArBlBmHnC^oC^pC{AqC^rC{AwByHyB^sC^tC^uC^vCqHrBrHtBsHvBeIbAtCaC_IeCsIdBmIxBaDsCpIuCeDJ{AmB^nCkIpClIrCfImCzAwC^xC`IiBtAyC^zC^{C^|CxC}C^~CtIyBoItCqIvCwBnB~IoB{A_D^`D^aDzAbD^cDxIcBaJcD^}CgDdByIzCzI|CtAdD^eD^fD^gD^hDhDzBbDiD^jDeJ{C|I~CrIuBtHHdJ~CtAkD^lDiJjDkJdBhJdBsB|B{H~B}H`CwBnClJvBpC}CiDeDfJgDrJfDgJhDwBmDnIzBnJ}B|H_CoJoCxBxCbJdBzAnDmJlDjJ|CzAgCaIiCcIkCyJhCbIjCdIdBpJHiDoD^pD^qD^rDcJIxJpCsJgDwJpChIrAvHuAdDxAtAMaGP^sD^tD`KhDlDItJxBaDzB{JiCzJdBrBuD^vD^wDxBdB}JpD~JrDxBJeKyBzHdBgKvDhKbClD}CjK~CoDwDuJ~BiKqDaKsAiIvAxHyAwIdBdKJkKdBnKrDtAxD^yDhDsCuIvCrKtC}IJnDzBlKbCoKtAwHwAjIzAvKdBwKcCqKyDmK_CtKuCzK`CyBNfHsDyBzD^{D^|D^}D^~D^_E^`E^aE^bE^cE^dE^eE^fE^gE^hElBiE^jElBkE^lE^mE^nE^oE^pE^qE^rE^sE^tE^uEbGd@yFf@{Fh@^w@cGy@eG{@fG}@aLlEbLnEdLpE^vE^wE^xE^yE}CzE^{E^|EmB}E^~E^_F^`F^aFzBmEcLoEeLbF^cF^dF^eF^fF^gF^hF^iF^jF|BnE^kF^lF^mF^nF^oF^pF^qF^rF^sF^tF^uF^vF^wF^xF^yF^zFmB{F^|F^}F^~F^_G^`GqJ~ClAaG^bG^cG^dG^eG^fG^gG^hG^iGlAjGmLcGoLeGqLgGsLiGlLbGnLdGpLfGrLhGtLbGxLeGvLhGwLcGuLfGzLiG{LcG~LgG}LdGyLgG_MdGaMhG`MeG|LiGbMeGcMfGeMfGgMgGhMhGfMgGjMhGiMiGkMiGxKuAbKyAzBkG^lG^mG^nG^oG^pG^qG^rG^sG^tGwFd@fLg@mBx@dGz@^uG^vG|CwG|KOrCxG^yGnDsCsKJfKjCoMkCsBzG^{GlMvApKzAnMtC{KvC_J`D`JHmMPcKtDtMaDsB|G^}G{A~G^_H^`H^aH^bHeDcHfBsDpM{G{MtDwM_HxMaHzMvC^cHsMJvM}GfBxG~MyGtDdH^eH^fH^gHrMuCuMHqMwAtD`HyMbH_NeH`NgHuDIeNJ_CfHbNvCcNxAnChH^iH^jH^kH^lHhNyAiNzAgNJzBmH^nH^oH^pHlAqH^rH^sH^tH}BgF~BuH^vH^wHfNgHuD}CrN~CsNdBdNaH|McHtNbHuNvCvNcHjNnHkNpHwNoHqAxH^yH^zH^{H^|H^}H^~H^_I^`I^aIxNpHlAbI^cI^dI^eIqAfI^gI^hI^iI^jIvDkIpDcFhLeF}BlI^mI^nI^oI^pIaCgIxDiI_OpE^qI^rI~AbFgLdFiLfF^sI^tI^uIvDyHyN{HwDvI^wI^xIgBcF`OfFjLyI^zIjOdFzDsI^{IvJ`ClAoEpD|I^}I~A~I^_J^`J^aJaCbJmOeFpNhF^uHqNwHgBcJ^dJdDeJ^fJ^gJ{DzHzN|H^vI|DxIgB|IdOhI^hJ^iJvOfFlOzIhBlIyDjJgBkJ^lJ^mJ~DhJaPdBqAnJ}NhI`PiJbPmIaOoIcO~ChBsInO~B|O{HwDoJ^pJ^qJ^rJfPiJuOpC|CJbE|H}OwI_P}IhBsJ^tJ^uJhBgF^yIrO_JtOaJaCvJ^wJfCvIfEwIxOdJzOfJ`EnIbOpIgCxJ^yJ^zJ^{JqPwJbE|J^}J^~J^_K^`KfCoJjPqJaE{IfC}H{N_I^aK^bK^cK^dK^eK}Ft@_GfKdEhFkLjF~AgK~DiIcPlJhE~BvPoIiPdBxPyJyP{JqAhK^iK^jK^kK^lK^mK^nK^oK{PjItPvA{CeJ{OgJhQiGkQ_ClPdBdEyI|P}J}P_KsApK^qKsPxIsAuHjQmJmNrHnNtH}BsJoPuJ{QvHuQwA^eJqArK^sK^tK^uK^vK^wK}KgE_LdBaEtIhExK^yK^zKlQpIlA{K^|K^}K^~KkEeJdRyKiRfJzQqKcRuInPtJ`Q~H|NaKbQcKdQeKfQu@^_L|B`L^vJrPjI_EvJwQ`C~AvE^aL^bLlRuJlAcL^dL^eL^fL|DgLlAhL^iLkExAkRgJnQzJfR~C}QwHxRdBsAjL^kL^lLpOpE^~IsO`JwR{J`EjJiQjI~QsK^mLlEnLyRkLzRjFgCoL^pLuRiLsAqL^rL^sLyQ~J~P`KgC`J_SlLjRzKrEmL~RJhSjFpRaLcSrLpEgIxDhJoRwJiSvK^nLxQzInSnLpSJiC~I{RaJ`SpL|RJrSuJ|QsHoNfFgO{I^tL^uLoQiKpQkKrQmKtQoKnE_IaQbKcQdKeQs@~Fu@^vLxSaKmRdKzSt@sStHdCuHjSbLvRyAkSsL~AqI~SzAgSaJuSjKqQlKsQnKrRdLsRfLfS_KcT`KsAiF_QpJkPrJeTqJrEtK`RvKaRfE~KhE_TrIbTeLtRwI^gL}SfFsEtLdTjFfTrJ`TkKvSnKiCbFfOeFdCwL^xLsAwLlAyL^zL^{L^|L^}LwEzL^~LlSiJvElKaToKmTxLgTuKlEwKbRhEjCcFkOgF~BiFsA_M^`M{SbKySeKoEvLvTcKnRs@tEfKjCcJyOvAvQfJtT`MwTdK|Su@^fKyTeKoE_LsTdFzDgFeEaM|TeFdCqLdSsLqTvKiTgEfEbM^cM^dM^eMfBfMqS_J{Ts@tEvL`Ut@}TfFsE~BvEgMxE`JnEhM^iMyDnIwP~CaUu@^jM^kM^lM^mM^nM^oM^pM^qMpBrM^sM^tM^uM^vMlUsMmUuMoDwM^xM^yM^zM{GjAyGmAoUtMnUvMpUxMqUzMsUkA}GnAqA{M^|MkBfKkB_L_EgIoTdBiCgKlA}MdUoIqA~M^_N^`N^aN^bN{DcNpEvJlAdN^eN_V|MpTmKjCkJdPmJaVnKcUiM{UpIgDaFyEgF~B_M|BfN_RtKhTwKrTdB~TwKiVfEjTdBjVgE|EhEuElIdV~CuEgFeEzIbUoK}EyI|U_N}UaN~UvHbVoKkVdB`VeNxTdJuPgJyEsIhOuIcVmIhPpImSjIgVsK}RvKoSJnT~LkTfL}EhFwOvHyUhI~NjIwEgNkBvL~EjJfUkMgUmMiUoMkUqM^hN^iN^jN^kNtUuMpVvMuUyMrUhAyCkAfBlN}C_B^mN^nN^oN_DpN^qN^rN^sN^tN^uN|EdByBvN^wN^xN^yNuCzN^{N^|NsVqNtVsNvVuNwVwNxV}N^~NzV|N{VrNuVtNqA_O^`O|VxNyViAvCaO^bO^cOlCyNyCaO`WcO~VsNgR|KhR~KkBdOcWtNxEoLaSuJlC}N}V{NaWiA_WbObFzNfVhFbFjA^aOhWaOmVuHdWuNiWbOgW{NcFiFkW|NlWjFjWcO_UyG~EnIeUaFnVlMhUnMjUpMqVzMvUlAfW~N_CeO^fO^gO^hO^iOpWfOqWhOsWtNoW{NtWgOrWiOwW|NmWmMoVpMnWhArVlAzWiA|GlAlCjO^kObWbOcFuHxWhOvWuN_ClOuWiO_XgOyWtNeWpL}WiO`XhObXtNaXuJ{WkO|WcOdXuNcXiOrBmO^nO^oO^pO^qO^rO^sO^tO^uO?vO</div>
+<div id="globalStacks" style="display:none"></div>
+<div id="methods" style="display:none">@??A??B?????B??C??pA?Cs?D??C??P@?kf?E??F??@V??F@G??C??@B????H??I??p??cA?J??K??pB?wB?L??M??@C?SF?N??O??PI?_hAP??Q??p@?Co?N??A??A?????J??K??PG?GC?R??K??`B????S??T??`I?OD?U??V??PG?GD?W??X??pE?WA?Y??X??@C?KS@Y??Z??@E@Wg?Y??[??p@?cW?\??]??PA?_??\??]??`??C@?^??_??`k?CK?`??a??`@?{B?b??a??Pe?kG?c??d??PH?siCe??f??@@?kV?e??f??`C?WO?e??g??`A?_P?e??h??@Z?OV?e??i??pM?wW?j??k??@A?ch?j??k??P_?gg?l??m??pD?s`Al??n??`B?ouBl??o??`s?OyBp??q??pg?oE?p??r??`??KM?p??r??pf?gL?p??r??PC?cM?p??s??@EBCR?t??u??PP?Wt?v??w??`??km?v??x??@G@Gm?v??y??PD?wi?z??{??pF?cE@z??|??@H?sB@}??|??@?????~???@?`??cB?@@??@?`??WB?A@??@?`??[B?B@??@?`??[C?C@??@?@E?{O?C@?D@?@C?wp?C@?D@?@?????E@?A??A?????v??w??pE?{m?v??F@?P??_p?v??G@?p@?ST?H@??@?p??OO?H@??@?@C?CQ?I@??@?`C?kH?J@?A??A?????R??K??PC????K@?L@?@W?GN?K@?M@?pA?gO?N@?O@?@B?WH?N@?O@?PG?OI?P@?O@?pE?WQ?Q@?O@?`D?[D?R@?O@?pH?O`?S@?O@?@A?SB?S@?O@?pW?cD?T@?U@?pB?[M?V@?W@?`G?oI?V@?X@?P??KK?Y@?Z@?P??_B?Y@?Z@?@@?kB?[@??@?@A?CG?\@?A??A?????]@?C??@M?KC?^@?_@?@A?cE?`@?_@?P@?GH?`@?a@?`I?CG?b@?c@?pr?kG?b@?d@?`d?OM?`@?e@?PY?KR?f@?g@?@A?sL?h@?X??PA?Ge?h@?i@?@M?Sf?h@?j@?@??su@k@?A??A?????A??l@?B?????Y??Z??`q@Gi?Y??m@?po?{l?}??n@?`B?c\?}??o@?pH?S]?}??p@?`l?gb?}??q@?PC?cc?r@??@?`??[F?s@??@?@B?_D?t@?A??A?????E??F??`E?GE@E??u@?pc?WA@v@?w@?pE?KZ?x@?y@?`B?gc@z@?A??A?????]@?C??pS?WC?N@?{@?@U?wL?K@?|@?PJ?sC?K@?}@?Pf?cJ?K@?~@?pM?wL?L??A??A?????K@?M@?`??cO??A?@A?PM?CJ?AA?A??A?????R??K??`A????L??BA?`??kI?L??BA?`N?GG?N??O??`@?_fAK@?}@?@o?oJ?CA?DA?@A?SG?CA?DA?`C?gG?CA?EA?P??sJ?^@?_@?@N?KF?^@?FA?pB?{G?GA?HA?@@?CU?f@?HA?p@?wI?IA?HA?@??[|?JA?A??A?????Q@?O@?pC?[D?KA?LA?@??_X?MA?A??A??????A?@A?`N?CJ?AA??@?`@?GA?S??T??PR?kD??A??@?pI?_D?r@?NA?`??sN?s@?NA?`B?sr?s@?OA?@G?OM?PA?QA?P??C\B?A??@?PG?_D?r@??@?p??gE?K@?~@?@T?wL?L???@?@O?[D?RA?A??A?????K@?}@?Px?GK?K@?SA?pL?_G?CA?EA?`E??K?TA?UA?@D????VA?WA?@A????p??XA?@B?__??A??@?PF?_D?r@?A??A?????S??T??@H?SD?YA?ZA?P??kd?[A?\A?`B?SE?[A?A??A?????P??Q??@C?Co?PA?]A?PI?wmBK@?}@?pr??K?L??^A?pH?gN?L??_A?@L?CT??A??@?`J?_D?r@?`A?@C?S[?S??T??PF?SD?S??aA?@B??G?YA?ZA?P??We?bA?\A?`B?oF?bA?A??A?????N@?O@?P??WH?P@?A??A?????S??T??@P?kD??A?A??A?????K@?~@?`L?sL??A??@?pA?WD?S??aA?PA??G?N??cA?pA?S?CP??dA?`??gC?eA?A??A?????Y??Z??`R@og?fA?A??A?????K@?|@?@F?WC?N@?DA?@A??G?Q@?DA?pC?CF?S??T??@E?OD?gA?A??A?????U??V??pR?_D?U??hA?`Z?wE?}??iA?`J?{O?}??jA?`@?cP?kA?lA?@A?kR?mA?nA?pN@WG?oA?UA?@F????pA?qA?@D????rA?sA?pL??T?tA??@?pF?GJ?N??uA?`C?WnAP??uA?PK?cR?vA?wA?pC?w]?xA?yA?pK?{T@xA?zA?@A?WU@{A?C??pB??O?|A?A??A?????{A?C??pH?_O?}A?~A?@@????U???B?`D?KF?@B?AB?@I?cC?BB?AB?p`?SB?YA?CB?@C?gp?DB?a??`D?GB?}??EB?`H?[e?l??EB?Pe?_BCl??FB?pF?oECl??GB?`B?_vBHB?IB?PV?_F?HB?JB?@A?{G?KB?a??@K?[B?KB?LB?@@?sB?}??o@?@D?G]?MB?NB?@c?_O?MB?OB?P_A[U?v??F@?PG?sp?v??PB?@@?_x?H@?PB?phAGg?QB??@?`@?WD?t@?A??B?????HB?IB?@W?_F?RB?SB?pF?SU?RB?SB?`B?gQ?TB?UB?PD?KJ?VB?UB?P@?GH?VB?UB?p_?WG?WB?SB?@B?gH?WB??@?PC?oD?XB?A??A?????BB?AB?pn?{B?`??YB?`@?WP?`??YB?`F?Ka?ZB?[B?P[?wA@\B?]B?pG?WF?^B?_B?@C????`B?aB?P@?[]?c??bB?`k?k[Dc??cB?`C?S]Dp??dB?P??WH?eB?fB?pD?WG?gB?q??p@?sM?gB??@?p??wL?eB??@?p??_B?hB??@?PG?C]?t??iB?PD?oq?v??F@?PD?gp?v??jB?p_?kV?kB?lB?p[?OB@mB?nB?PnFGB@mB?oB?`D?[c?mB?pB?@d?kU?BB?AB?@y?GC?BB?qB?pH?KE?HB?rB?p??GB?HB?rB?p??sC?^??rB?PA?cE?^??sB?pA?KF?HB?tB?p@?GB?HB?tB?@??SC?HB?A??A?????BB?AB?`s?CC?U???B?PF?OF?@B?uB?pZ??C?`??vB?P@?WO?`??vB?@F?{_?ZB?wB?pM?_M?\B?]B?@C?SF?xB?]B?pD?sEAxB?yB?PG?SFAp??q??PC?WG?p??q??PC?CG?H@??@?pA?CQ?I@?A??A?????zB?A??A?????Y??Z??Pe@oh?{B?A??A?????^@?FA?@A?sG?|B?A??A?????^@?FA?@S?[H?}B?A??A?????K@?}@?@A@sK?K@?~B?PD??H?H??K??pB?[A?oA??C?p@????pA?WA?P?????@C?A??A?????H??K??@D?[A?E??nB?PN?sS@v@?AC?`F?cX?BC?A??A?????CC?C??PM?wG?DC?EC?@B?SG?FC?GC?@@?GJ?HC?C??P???Q?IC?JC?@@?gH?U???B?pC?KF?W??KC?@@?{@?Y??KC?@B?{e@LC?A??A?????BB?AB?PG?GA?MC?NC?P@?Gh?MC?OC?p@?oV?TB?OC?@D?_L?WB??@?Pa?CH?PC?QC?`B?oL?FC?A??A?????@B?uB?@Q?gB?BB?RC?P??SF?MC?SC?@A?OYAMC?TC?p@?kr@TB?TC?PM?OH?UC?TC?`F?[B?VC?WC?p??{E?VC?WC?pF?gE?VC?XC?pJ?oD?YC?A??A?????BB?AB?PH?OA?ZC?[C?P??_M?\C?]C?@??KF?^C?A??A?????@B?uB?@N?_B?_C?|??pB?K_?`C?|??`??kA?`C?|??pG?{V?`C?A??A?????BB?RC?@B?[F?VB?UB?@[?WG?`C?`A?@C?Sn?aC?`A?@A?{B?N???@?`@?cU@N???@?pP?C`?HB?IB?Ph?CG?bC?A??A?????VB?UB?P??OF?cC?dC?@??WC?cC?A??A?????UC?TC?pB?OB?eC?W@?@??OC?eC?A??A?????WB?SB?@??gH?WB?A??A?????cC?dC?PA?[C?RB?SB?@B?GU?f@?A??A?????HB?IB?`Z?cF?WB?fC?@G??A@WB?fC?`FAgF@gC?A??A?????_C?|??PA?K_?RB?SB?`D?KU?hC?iC?@F?_^Dh@?i@?@D?Kf?h@?jC?P`?wj?kC?A??A?????`C?|??pF?wV?`C?|??PP?CV?aC?`A?@??{B?RB?SB?@C?GU?f@??@?P@?kE?h@?A??A?????@B?uB?pA?{A?UC?TC?@D?SB?eC?lC?P??kN?mC?LA?@??GP?mC?A??A?????VB?UB?@Y?SG?VB?SB?@l@GQ?nC?A??A?????_C?|??@B?K_?oC?M??@X?[P?WB?fC?@V?OB@WB?pC?@A?[I?qC?rC?@A?gH?sC?A??A?????TB?TC?pK?OH?tC?uC?`E?sB?TB?uC?`D?gF?vC?wC?@??[X?UC?A??A?????VC?XC?`L?oD?YC??@?@@?wB?xC??@?`??GD?yC??@?`??cB?zC??@?`??KC?{C?A??A?????HB?IB?@b?{F?@B?uB?pQ?gB?|C?g@?@D?K\?|C?g@?p@?W[?|C?}C?p@?ON?|C?}C?PH?sM?PA?QA?`@?cXBPA?QA?p@?_ZB{C?A??B?????WB??@?P@?cD?~C?A??A?????@B?uB?pL?_B?oA??C?P@?????D?nA?pF????@D?nA?pD????pA?qA?PB????vA?AD?p@?k\?f@?HA?@@?wI?h@?BD?PA?gw?IA?A??A?????BB?AB?@d?oB?CD?HA?@@????LC?HA?`A?{KADD?A??A?????ED?A??B?????@B?AB?@D?_C?HB?JB?pB?CH?FD?A??A?????BB?AB?@E?CA?MC?GD?P@?[I@HD?GD?p??wE?TB?ID?`B?[M?eC?A??B?????BB?AB?`F?GA?JD?A??A?????WB??@?P??sF?RB??@?P??GI?qC??@?P@?_D??D?nA?pP????vA?Q??`@?KW?WB?fC?Po@?F@KD?LD?@??WF?WB??@?`A?cD?~C??@?pA?[A?ED?A??A?????MD?HA?@??Or?ND?A??A?????E@?A??B?????WB??@?P_?CH?OD?A??A?????BB?AB?PC?{@?_C?PD?pB?wb?_C?PD?PB?Oa?`C?QD?P??kA?`C?QD?PH??Q?_C?PD?PF?Sa?WB??@?PN?OG?KD?A??A?????WB?A??B?????eC?W@?`B?WC?RD?SD?`A?SP?RD?TD?@?????VC?A??A?????Y??Z??`v@Oi?|C?}C?@L?{M?VC?WC?PA?_E?`C?UD?P??WH?VD?C??@W??F?WD?XD?P??gH?YD?ZD?P??s@?YD?ZD?@A?OB?[D?ZD?PI?[W?[D?\D?PL?cY?]D?ZD?@?????^D?A??A?????^@?_@?P??_E?^@?_D?@H?CG?`D?QC?@\?oM?`@?QC?pB?GL?aD?A??A?????Q@?DA?`D?CF?R@?DA?@Z?CY?S@?DA?@A?KO?S@?DA?pP?SQ?@B?uB?pC??B?bD?A??A?????BB?AB?p@?{@?@B?uB?@J?SB?ZC?cD?`@?WO?\C?dD?P@?kF?eD??@?PA?OC?\C??@?@C?CE?MC?SC?P@?OYABB?AB?@R@wC?fD?A??A?????@B?AB?pB?_C?_C?PD?@B?wb?VD?C??PY?CF?J??gD?`??w@?J??gD?`@?_B?K@??@?@D?[A?Y??Z??PM@cg?}??p@?@i?[b?hD?iD?pA?OT?hD?A??A?????v@?w@?PB??Z?jD?kD?@@?OV?lD?kD?pD?CI?mD?nD?PD?wz?mD?oD?`u?[j?pD?A??A?????U??V??`B??D?qD?rD?P@?Gm?mD?sD?`??G?@tD?uD?`^?[]?V@?X@?`D?[K?vD?wD?PT?G^?xD?A??A?????tD?uD?pe?c]?V@?wD?PC?wL?@B?uB?PG?OB?|C?A??A?????yD?Z@?P??{P?yD?Z@?@??GQ?zD?A??A?????{D?A??B?????v@?AC?`^?[Y?v@?|D?`@?{I?jD?rD?@@?GS?lD?rD?PA?cH?mD?oD?pB?gy?tD?uD?Pj?w]?tD?}D?`q?Ka?v@?AC?@K?kX?K@?|@?`H?_C?K@?~D?@G?kE?N@??E?@A?[E?N@?@E?`J?CE?Q@?@E?@@?OB?qC?@E?pD??F?`D?AE?@E?_O?XB?BE?@?????CE?A??A?????</div>
+<span style="position:fixed; bottom: 0; right:0; padding: 2px 4px; background-color: #ffffe0; border-top: 1px solid #ffc000; border-left: 1px solid #ffc000; border-top-left-radius: 4px;"><span id="produced">Produced by <a href='https://github.com/jvm-profiling-tools/async-profiler'>async-profiler</a>&nbsp;</span><span id='match' style="display: none">Matched: <span id='matchval'></span>&nbsp;<span id='reset' title='Clear'>&#x274c;</span></span></span>
+
+<h1 id="title">Heatmap, ALLOC</h1>
+
+<canvas id='canvas'></canvas>
+<div id='hl'><span></span></div>
+
+<span id='status' style="position:fixed; bottom: 0; left:0; padding: 2px 4px; background-color: #ffffe0; border-top: 1px solid #ffc000; border-right: 1px solid #ffc000; border-top-right-radius: 4px; display: none">&nbsp;</span>
+<script>
+	// Copyright 2020 Andrei Pangin
+	// Licensed under the Apache License, Version 2.0.
+	'use strict';
+	let root, rootLevel, px, pattern;
+	let reverse = true;
+	const levels = Array(0);
+	for (let h = 0; h < levels.length; h++) {
+		levels[h] = [];
+	}
+
+	const canvas = document.getElementById('canvas');
+	let c = canvas.getContext('2d');
+	const hl = document.getElementById('hl');
+	const status = document.getElementById('status');
+
+	const canvasWidth = canvas.offsetWidth;
+	let canvasHeight = canvas.offsetHeight;
+	canvas.style.width = canvasWidth + 'px';
+	canvas.width = canvasWidth * (devicePixelRatio || 1);
+	canvas.height = canvasHeight * (devicePixelRatio || 1);
+	if (devicePixelRatio) c.scale(devicePixelRatio, devicePixelRatio);
+	c.font = document.body.style.font;
+
+    const search = typeof searchIterative === 'function' ? searchIterative : searchSimple;
+    const init = typeof renderHeatmap === 'function' ? renderHeatmap : render;
+
+	const palette = [
+		[0xb2e1b2, 20, 20, 20],
+		[0x50e150, 30, 30, 30],
+		[0x50cccc, 30, 30, 30],
+		[0xe15a5a, 30, 40, 40],
+		[0xc8c83c, 30, 30, 10],
+		[0xe17d00, 30, 30,  0],
+		[0xcce880, 20, 20, 20],
+	];
+
+	function getColor(p) {
+		const v = Math.random();
+		return '#' + (p[0] + ((p[1] * v) << 16 | (p[2] * v) << 8 | (p[3] * v))).toString(16);
+	}
+
+	function f(level, left, width, type, title, inln, c1, int) {
+		levels[level].push({left: left, width: width, color: getColor(palette[type]), title: title,
+			details: (int ? ', int=' + int : '') + (c1 ? ', c1=' + c1 : '') + (inln ? ', inln=' + inln : '')
+		});
+	}
+
+	function samples(n) {
+		return n === 1 ? '1 sample' : n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' samples';
+	}
+
+	function pct(a, b) {
+		return a >= b ? '100' : (100 * a / b).toFixed(2);
+	}
+
+	function findFrame(frames, x) {
+		let left = 0;
+		let right = frames.length - 1;
+
+		while (left <= right) {
+			const mid = (left + right) >>> 1;
+			const f = frames[mid];
+
+			if (f.left > x) {
+				right = mid - 1;
+			} else if (f.left + f.width <= x) {
+				left = mid + 1;
+			} else {
+				return f;
+			}
+		}
+
+		if (frames[left] && (frames[left].left - x) * px < 0.5) return frames[left];
+		if (frames[right] && (x - (frames[right].left + frames[right].width)) * px < 0.5) return frames[right];
+
+		return null;
+	}
+
+    const marked = [];
+
+    function render(newRoot, newLevel, minLevel) {
+        minLevel = minLevel || 0;
+        if (root && minLevel === 0) {
+			c.fillStyle = '#ffffff';
+			c.fillRect(0, 0, canvasWidth, canvasHeight);
+		}
+
+		root = newRoot || levels[0][0];
+		rootLevel = newLevel || 0;
+		px = canvasWidth / root.width;
+
+		const x0 = root.left;
+		const x1 = x0 + root.width;
+
+		if (minLevel === 0) {
+		    marked.length = 0;
+        }
+
+		function mark(f) {
+			return marked[f.left] >= f.width || (marked[f.left] = f.width);
+		}
+
+		function totalMarked() {
+			let total = 0;
+			let left = 0;
+			Object.keys(marked).sort(function(a, b) { return a - b; }).forEach(function(x) {
+				if (+x >= left) {
+					total += marked[x];
+					left = +x + marked[x];
+				}
+			});
+			return total;
+		}
+
+		function drawFrame(f, y, alpha) {
+			if (f.left < x1 && f.left + f.width > x0) {
+                let match = pattern && pattern.test(f.title) && mark(f);
+                const fw = f.width * px;
+                if (fw < 0.1) {
+                    return;
+                }
+                c.fillStyle = match ? '#ee00ee' : f.color;
+				c.fillRect((f.left - x0) * px, y, fw, 15);
+
+				if (fw >= 21) {
+					const chars = Math.floor(fw / 7);
+					const title = f.title.length <= chars ? f.title : f.title.substring(0, chars - 2) + '..';
+					c.fillStyle = '#000000';
+					c.fillText(title, Math.max(f.left - x0, 0) * px + 3, y + 12, fw - 6);
+				}
+
+				if (alpha) {
+					c.fillStyle = 'rgba(255, 255, 255, 0.5)';
+					c.fillRect((f.left - x0) * px, y, fw, 15);
+				}
+			}
+		}
+
+		for (let h = minLevel; h < levels.length; h++) {
+			const y = reverse ? h * 16 : canvasHeight - (h + 1) * 16;
+			const frames = levels[h];
+			for (let i = 0; i < frames.length; i++) {
+				drawFrame(frames[i], y, h < rootLevel);
+			}
+		}
+
+		return totalMarked();
+	}
+
+	canvas.onmousemove = function() {
+		const h = Math.floor((reverse ? event.offsetY : (canvasHeight - event.offsetY)) / 16);
+		if (h >= 0 && h < levels.length) {
+			const f = findFrame(levels[h], event.offsetX / px + root.left);
+			if (f) {
+				hl.style.left = (Math.max(f.left - root.left, 0) * px + canvas.offsetLeft) + 'px';
+				hl.style.width = (Math.min(f.width, root.width) * px) + 'px';
+				hl.style.top = ((reverse ? h * 16 : canvasHeight - (h + 1) * 16) + canvas.offsetTop) + 'px';
+				hl.firstChild.textContent = f.title;
+				hl.style.display = 'block';
+				let details = f.details || '';
+				canvas.title = f.title + '\n(' + samples(f.width) + details + ', ' + pct(f.width, levels[0][0].width) + '%)';
+				canvas.style.cursor = 'pointer';
+				canvas.onclick = function() {
+					if (f !== root) {
+						render(f, h);
+						canvas.onmousemove();
+					}
+				};
+				status.textContent = 'Function: ' + canvas.title;
+                status.style.display = 'inline';
+				return;
+			}
+		}
+		canvas.onmouseout();
+	}
+
+	canvas.onmouseout = function() {
+		hl.style.display = 'none';
+		status.textContent = '\xa0';
+        status.style.display = 'none';
+		canvas.title = '';
+		canvas.style.cursor = '';
+		canvas.onclick = '';
+	}
+
+    window.onkeydown = function() {
+        if (event.ctrlKey && event.keyCode === 70) {
+            event.preventDefault();
+            search(true);
+        } else if (event.keyCode === 27) {
+            search(false);
+        }
+    }
+
+    document.getElementById('reset').onclick = function() {
+        search(false);
+    }
+
+
+
+    class DataBuffer {
+        data;
+        pos = 0;
+        constructor(encodedData) {
+            this.data = encodedData;
+        }
+
+        nextVarInt() {
+            let res = 0;
+            let shift = 0;
+            let b;
+            do {
+                b = this.byteAt(this.pos++);
+                res |= (b & 0x1F) << shift
+                shift += 5;
+            } while (b >= 0x20)
+            return res;
+        }
+
+        byteAt(pos) {
+            return this.data.charCodeAt(pos) - 63;
+        }
+
+        int30(pos) {
+            return (this.byteAt(pos++) << 0)
+                | (this.byteAt(pos++) << 6)
+                | (this.byteAt(pos++) << 12)
+                | (this.byteAt(pos++) << 18)
+                | (this.byteAt(pos) << 24);
+        }
+
+        int36(pos) {
+            return (this.byteAt(pos++) << 0)
+                | (this.byteAt(pos++) << 6)
+                | (this.byteAt(pos++) << 12)
+                | (this.byteAt(pos++) << 18)
+                | (this.byteAt(pos++) << 24)
+                | (this.byteAt(pos++) << 30);
+        }
+
+        varInt(pos) {
+            let res = 0;
+            let shift = 0;
+            let b;
+            do {
+                b = this.byteAt(pos++);
+                res |= (b & 0x1F) << shift
+                shift += 5;
+            } while (b >= 0x20)
+            return res;
+        }
+
+    }
+
+    class HeatmapCollection extends DataBuffer {
+
+        maxZoom;
+        blocks;
+        zoomToCounts;
+        zoomToMaxes;
+        zoom;
+
+        constructor(encodedData) {
+            super(encodedData);
+
+            this.maxZoom = this.nextVarInt();   // fixme
+            this.maxZoom = 3;
+
+            const startMethodsCount = this.nextVarInt();
+            const starts = new Set();
+            for (let i = 0; i < startMethodsCount; i++) {
+                starts.add(this.nextVarInt());
+            }
+
+            const lz = new Lz78Data(this, starts);
+
+            let max = 1;
+
+            let prevByte = -1;
+            const blocksCount = this.nextVarInt();
+            let counts = new Uint32Array(blocksCount);
+            for (let i = 0; i < blocksCount; i++) {
+                let v = 0;
+                let p = 0;
+                let hasMore = false;
+                do {
+                    if (prevByte === -1) {
+                        prevByte = this.byteAt(this.pos++);
+                        hasMore = (prevByte >>> 5) === 1;
+                        v |= ((prevByte >>> 3) & 3) << p;
+                        prevByte &= 7;
+                    } else {
+                        hasMore = (prevByte >>> 2) === 1;
+                        v |= (prevByte & 3) << p;
+                        prevByte = -1;
+                    }
+                    p += 2;
+                } while (hasMore);
+                counts[i] = v;
+                max = Math.max(max, v);
+            }
+
+            this.blocks = lz.decode(counts);
+
+            this.zoomToCounts = new Array(this.maxZoom);
+            this.zoomToMaxes = new Array(this.maxZoom);
+
+            this.zoomToCounts[0] = counts;
+            this.zoomToMaxes[0] = max;
+
+            for (let z = 1; z < zoomToGroupSize.length; z++) {
+                const size = zoomToGroupSize[z] / zoomToGroupSize[z - 1];
+                const nextCounts = new Uint32Array(Math.ceil(counts.length / size));
+                for (let i = 0; i < counts.length; i++) {
+                    const index = (i / size) | 0;
+                    nextCounts[index] += counts[i];
+                    max = Math.max(max, nextCounts[index]);
+                }
+                this.zoomToCounts[z] = counts = nextCounts;
+                this.zoomToMaxes[z] = max;
+            }
+
+            this.data = null;
+        }
+
+        setZoom(zoom) {
+            this.zoom = zoom;
+        }
+
+        heatmap() {
+            return this.zoomToCounts[this.zoom];
+        }
+
+        max() {
+            return this.zoomToMaxes[this.zoom];
+        }
+
+        currentTimeBlock() {
+            // FIXME 20 is hardcoded
+            return 20 * zoomToGroupSize[this.zoom];
+        }
+
+        startBlock() {
+            const blockMs = this.currentTimeBlock();
+            const timeBlockMs = blockMs * heatHeight * 20;
+            return Math.floor(startMs % timeBlockMs / blockMs);
+        }
+
+        count() {
+            return Math.ceil((this.heatmap().length + this.startBlock()) / 20 / heatHeight) * 20 * heatHeight;
+        }
+
+    }
+
+    class LzChunk extends Uint32Array {
+        constructor(size) {
+            super(size);
+        }
+
+        copyWithNext(element) {
+            let result = new LzChunk(this.length + 1);
+            result.set(this);
+            result[this.length] = element;
+            return result;
+        }
+    }
+
+    class Lz78Data {
+        data;
+        starts;
+        lz78;
+
+        tmp = [];
+        prevSubTreeId = -1;
+
+        constructor(data, starts) {
+            this.data = data;
+            this.starts = starts;
+
+            this.lz78 = [new LzChunk(0)];
+        }
+
+        decode(counts) {
+            const synonymsCount = this.data.nextVarInt();
+            const synonyms = new Uint32Array(synonymsCount);
+            for (let i = 0; i < synonymsCount; i++) {
+                synonyms[i] = this.data.nextVarInt();
+            }
+
+            const tailsCount = this.data.nextVarInt();
+            const tails = new Uint32Array(tailsCount);
+            for (let i = 0; i < tailsCount; i++) {
+                const tail = this.data.nextVarInt();
+                tails[i] = (tail < synonyms.length ? synonyms[tail] : tail) - synonymsCount;
+            }
+
+            const result = new Array(counts.length);
+            for (let i = 0; i < counts.length; i++) {
+                result[i] = new Array(counts[i]);
+            }
+
+            let thisChunk = null;
+            let currentTail = 0;
+            const tmp = [];
+            let t = -1;
+            for (let block of result) {
+                for (let i = 0; i < block.length; i++, currentTail++) {
+                    t++;
+                    const tailId = tails[currentTail];
+                    if (tailId < this.lz78.length) {
+                        const tail = this.lz78[tailId];
+                        if (tail.length !== 0 && this.starts.has(tail[0])) {
+                            console.log(t, 'only', tailId);
+                            block[i] = tail;
+                            continue;
+                        }
+                    }
+
+                    if (thisChunk === null) {
+                        const chunkId = this.data.nextVarInt();
+                        const prevChunk = this.lz78[(chunkId < synonyms.length ? synonyms[chunkId] : chunkId) - synonymsCount];
+                        const addMethodId = this.data.nextVarInt();
+                        console.log(t, 'chunk', chunkId, addMethodId);
+                        thisChunk = prevChunk.copyWithNext(addMethodId);
+                        this.lz78.push(thisChunk);
+                    }
+
+                    tmp.length = 0;
+                    tmp.push(...thisChunk); // FIXME it is ok to push as is, or even as lz78 index
+
+                    while (true) {
+                        const chunkId = this.data.nextVarInt();
+                        const prevChunk = this.lz78[(chunkId < synonyms.length ? synonyms[chunkId] : chunkId) - synonymsCount];
+                        const addMethodId = this.data.nextVarInt();
+                        thisChunk = prevChunk.copyWithNext(addMethodId);
+                        this.lz78.push(thisChunk);
+                        console.log(t, 'chunk', chunkId, addMethodId);
+
+                        if (this.starts.has(thisChunk[0])) {
+                            console.log(t, 'starts', thisChunk[0]);
+                            console.log(t, 'ends', tailId);
+                            const tail = this.lz78[tailId];
+                            tmp.push(...tail);
+                            block[i] = new Uint32Array(tmp);
+                            break;
+                        } else {
+                            tmp.push(...thisChunk);
+                        }
+                    }
+                }
+            }
+
+            return result;
+        }
+    }
+
+    class Queue {
+        data = new Array(1024);
+        first = 0;
+        afterLast = 0;
+
+        push(e) {
+            let a = this.afterLast;
+            let d = this.data;
+            d[a++] = e;
+            if (a >= this.data.length) {
+                a = 0;
+            }
+            if (a === this.first) {
+                let d2 = new Array(d.length * 2);
+                let i = 0;
+                for (let p = a; p < d.length; p++) {
+                    d2[i++] = d[p];
+                }
+                for (let p = 0; p < a; p++) {
+                    d2[i++] = d[p];
+                }
+                this.data = d2;
+                this.first = 0;
+                this.afterLast = i;
+            } else {
+                this.afterLast = a;
+            }
+        }
+
+        shift() {
+            let i = this.first;
+            let r = this.data[i++];
+            if (i >= this.data.length) {
+                this.first = 0;
+            } else {
+                this.first = i;
+            }
+            return r;
+        }
+
+        size() {
+            let r = this.afterLast - this.first;
+            if (r < 0) {
+                return r + this.data.length;
+            }
+            return r;
+        }
+
+        reset() {
+            this.first = this.afterLast = 0;
+        }
+    }
+
+    function claimHtml(id) {
+        let e = document.getElementById(id);
+        let r = e.innerHTML;
+        e.remove();
+        return r;
+    }
+
+    let sq = 5;
+    let sqPx = sq;
+    let sqScale = 1;
+    const canvasScrollPadding = 200;
+    let canvasTimeHeight = 12;
+    let canvasTimeHeightPx = 12;
+    let ticksPerSecond = 2304070421;
+    let startMs = 1664985989743;
+
+    const zoomToGroupSize = [
+        1,              // 20 ms
+        50,             // 1 s
+        50 * 5,         // 5 s
+        50 * 60         // 1 m
+    ];
+    const zoomToHeight = [50, 60, 60, 60]
+
+    let methods = new DataBuffer(claimHtml("methods"));
+    let executionsHeatmap = new HeatmapCollection(claimHtml("executionsHeatmap"));
+    let cpool = ["all","","java.lang.Thread","run","java.util.concurrent.ThreadPoolExecutor$Worker","java.util.concurrent.ThreadPoolExecutor","runWorker","ok.dht.test.saskov.HttpServerWithExecutors$$Lambda$69.0x0000000800c8a5f0","ok.dht.test.saskov.HttpServerWithExecutors","lambda$handleRequest$0","one.nio.http.HttpServer","handleRequest","one.nio.http.Request","getPath","java.lang.String","substring","java.lang.StringLatin1","newString","RequestHandler1_handlePut","ok.dht.test.saskov.MyService","handlePut","ok.dht.test.saskov.database.drozdov.MemorySegmentDao","upsert","ok.dht.test.saskov.database.drozdov.Memory","put","java.util.concurrent.ConcurrentSkipListMap","doPut","cpr","ok.dht.test.saskov.database.drozdov.MemorySegmentComparator","compare","jdk.internal.foreign.AbstractMemorySegmentImpl","mismatch","jdk.incubator.foreign.MemoryAccess","<clinit>","jdk.incubator.foreign.MemoryHandles","java.lang.invoke.MethodHandles","explicitCastArguments","java.lang.invoke.MethodHandleImpl","makePairwiseConvert","makePairwiseConvertByEditor","computeValueConversions","valueConversion","sun.invoke.util.ValueConversions","convertPrimitive","java.lang.invoke.MethodHandles$Lookup","findStatic","getDirectMethod","getDirectMethodCommon","java.lang.invoke.DirectMethodHandle","make","preparedLambdaForm","makePreparedLambdaForm","java.lang.invoke.LambdaForm","compileToBytecode","java.lang.invoke.InvokerBytecodeGenerator","generateCustomizedCode","lookupPregenerated","resolveFrom","java.lang.invoke.MemberName$Factory","resolveOrNull","resolve","java.lang.invoke.MethodHandleNatives","java.lang.NoSuchMethodError","<init>","java.lang.IncompatibleClassChangeError","java.lang.LinkageError","java.lang.Error","java.lang.Throwable","fillInStackTrace","int[]","generateCustomizedCodeBytes","classFilePrologue","jdk.internal.org.objectweb.asm.ClassWriter","jdk.internal.org.objectweb.asm.SymbolTable","jdk.internal.org.objectweb.asm.SymbolTable$Entry[]","one.nio.http.HttpSession","sendResponse","writeResponse","one.nio.net.Session","write","one.nio.net.Session$ArrayQueueItem","one.nio.net.JavaSocket","sun.nio.ch.SocketChannelImpl","sun.nio.ch.IOUtil","sun.nio.ch.Util","getTemporaryDirectBuffer","java.lang.ThreadLocal","get","setInitialValue","sun.nio.ch.Util$1","initialValue","sun.nio.ch.Util$BufferCache","java.nio.ByteBuffer[]","one.nio.server.SelectorThread","one.nio.net.JavaSelector","select","sun.nio.ch.SelectorImpl","lockAndDoSelect","sun.nio.ch.KQueueSelectorImpl","doSelect","processEvents","processReadyEvents","java.util.HashSet","add","java.util.HashMap","putVal","newNode","java.util.HashMap$Node","no_Java_frame","addIndices","linkMethod","linkMethodImpl","varHandleOperationLinkerMethod","getVarHandleGuardMethodName","java.lang.StringBuilder","java.lang.AbstractStringBuilder","byte[]","getTask","java.util.concurrent.LinkedBlockingQueue","take","java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject","await","java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode","process","processRead","processHttpBuffer","parseRequest","one.nio.http.Response","toBytes","one.nio.util.ByteArrayBuilder","getParameter","one.nio.util.Utf8","read","toAsciiString","iteratorFor","sun.nio.ch.Util$2","iterator","java.util.HashMap$KeySet","java.util.HashMap$KeyIterator","java.nio.ByteBuffer","wrap","java.nio.HeapByteBuffer","append","ensureCapacityInternal","java.util.Arrays","copyOf","java.lang.String[]","startParsingRequestBody","java.lang.invoke.LambdaForm$MH.0x0000000800c8c800","invokeExact_MT","java.lang.invoke.LambdaForm$DMH.0x0000000800c91000","newInvokeSpecial","allocateInstance","jdk.incubator.foreign.MemorySegment","ofArray","jdk.internal.foreign.HeapMemorySegmentImpl$OfByte","fromArray","copyOfRange","getHeader","trim","toString","getSegmentFromString","jdk.internal.foreign.HeapMemorySegmentImpl$OfChar","toCharArray","toChars","char[]","java.util.concurrent.ConcurrentSkipListMap$Node","ok.dht.test.saskov.database.BaseEntry","flushInBg","linkCallSite","linkCallSiteImpl","java.lang.invoke.CallSite","makeSite","java.lang.invoke.BootstrapMethodInvoker","invoke","java.lang.invoke.Invokers$Holder","java.lang.invoke.DirectMethodHandle$Holder","invokeStatic","java.lang.invoke.LambdaMetafactory","metafactory","java.lang.invoke.InnerClassLambdaMetafactory","replace","java.lang.StringConcatHelper","newArray","jdk.internal.misc.Unsafe","allocateUninitializedArray","allocateUninitializedArray0","java.util.concurrent.FutureTask","java.lang.Class[]","ok.dht.test.saskov.database.drozdov.MemorySegmentDao$$Lambda$78.0x0000000800c8ae70","call","lambda$flushInBg$1","ok.dht.test.saskov.database.drozdov.Storage","save","ok.dht.test.saskov.database.drozdov.StorageUtil","mapFile","jdk.internal.foreign.NativeMemorySegmentImpl","linkMethodHandleConstant","getDirectMethodForConstant","getDirectMethodNoSecurityManager","jdk.internal.foreign.MappedMemorySegmentImpl","makeMappedSegment","openOptions","jdk.internal.misc.ExtendedMapMode","newMapMode","java.lang.invoke.Invokers","methodHandleInvokeLinkerMethod","invokeHandleForm","toByteArray","jdk.internal.org.objectweb.asm.ByteVector","java.nio.channels.FileChannel","open","sun.nio.fs.UnixFileSystemProvider","newFileChannel","sun.nio.fs.UnixChannelFactory","sun.nio.ch.FileChannelImpl","java.lang.Object","setLongAtOffset","java.lang.invoke.VarHandleGuards","guard_LJJ_V","java.lang.invoke.IndirectVarHandle","getMethodHandle","java.lang.invoke.VarHandles$$Lambda$74.0x0000000800cf2178","apply","java.lang.invoke.VarHandles","lambda$filterCoordinates$1","filterArguments","filterArgument","rebind","java.lang.invoke.BoundMethodHandle","makeReinvoker","java.lang.invoke.BoundMethodHandle$Species_L","java.lang.invoke.MethodHandle","prepare","clinit","jdk.internal.org.objectweb.asm.MethodWriter","visitMethodInsn","jdk.internal.org.objectweb.asm.Frame","execute","push","getAbstractTypeFromDescriptor","writeRecord","asSlice","asSliceNoCheck","dup","load","getLongAtOffset","guard_LJ_J","java.lang.invoke.VarHandle","getMethodHandleUncached","java.lang.ClassCastException","java.util.concurrent.ConcurrentSkipListMap$Index","one.nio.net.Session[]","one.nio.net.JavaSelector$1","handleParsedRequest","linkToTargetMethod","ok.dht.test.saskov.HttpServerWithExecutors$$Lambda$69+0x0000000800c8a5f0","offer","java.util.concurrent.LinkedBlockingQueue$Node","jdk.internal.ref.CleanerImpl","jdk.internal.ref.PhantomCleanable","clean","jdk.internal.ref.CleanerImpl$PhantomCleanableRef","performCleanup","jdk.internal.foreign.ResourceScopeImpl$ResourceList","jdk.internal.foreign.SharedScope$SharedResourceList","cleanup","values","java.util.concurrent.ConcurrentSkipListMap$Values","java.nio.file.Files","createFile","newByteChannel","java.lang.ref.Cleaner","register","mapForRead","size","readAttributes","sun.nio.fs.UnixFileAttributeViews$Basic","sun.nio.fs.UnixException","rethrowAsIOException","translateToIOException","java.nio.file.NoSuchFileException","jdk.incubator.foreign.ResourceScope","newConfinedScope","jdk.internal.foreign.ResourceScopeImpl","createConfined","jdk.internal.foreign.ConfinedScope","java.nio.file.Path","sun.nio.fs.UnixPath","sun.nio.fs.Util","jdk.internal.foreign.MappedMemorySegmentImpl$1","sun.nio.fs.UnixChannelFactory$Flags","toFlags","sun.nio.fs.UnixFileAttributes","mapInternal","sun.nio.ch.FileChannelImpl$DefaultUnmapper","java.util.Collections","addAll","resize","java.util.HashMap$Node[]","asBasicFileAttributes","sun.nio.fs.UnixFileAttributes$UnixAsBasicFileAttributes","java.io.FileDescriptor","sun.nio.fs.UnixFileSystem","beginBlocking","java.nio.channels.spi.AbstractInterruptibleChannel","begin","java.nio.channels.spi.AbstractInterruptibleChannel$1","sun.nio.fs.BsdFileSystemProvider","getFileAttributeView","sun.nio.fs.UnixFileAttributeViews","createBasicView","java.nio.file.FileSystemException","java.io.IOException","java.lang.Exception","java.lang.Object[]","java.util.ArrayList","grow","sun.nio.ch.NativeThreadSet","java.lang.invoke.LambdaForm$MH.0x0000000800c02400","java.lang.invoke.LambdaForm$MH.0x0000000800c0d000","newArrayWithSuffix","keySet","ok.dht.test.saskov.database.drozdov.Storage$$Lambda$79.0x0000000800c8b298","java.util.concurrent.ConcurrentSkipListMap$ValueIterator","long[]","java.nio.file.OpenOption[]","deleteIfExists","sun.nio.fs.AbstractFileSystemProvider","implDelete","java.nio.file.attribute.FileAttribute[]","sun.nio.ch.FileDispatcherImpl","duplicateForMapping","java.util.ImmutableCollections$Set12","java.util.ImmutableCollections$Set12$1","sun.nio.ch.FileChannelImpl$Closer","resolveSibling","getParent","sun.nio.fs.UnixNativeDispatcher","stat","stat0","getPathForExceptionMessage","one.nio.server.AcceptorThread","one.nio.net.Socket","acceptNonBlocking","one.nio.net.JavaServerSocket","accept","sun.nio.ch.ServerSocketChannelImpl","implAccept","sun.nio.ch.Net","java.net.Inet4Address","registerPendingSessions","java.nio.channels.spi.AbstractSelectableChannel","sun.nio.ch.SelectionKeyImpl","java.nio.file.LinkOption[]","newSharedScope","createShared","jdk.internal.foreign.SharedScope","java.nio.file.CopyOption[]","createSession","java.lang.invoke.MethodType","makeImpl","java.util.concurrent.locks.ReentrantLock","lockInterruptibly","java.util.concurrent.locks.ReentrantLock$Sync","java.util.concurrent.locks.AbstractQueuedSynchronizer","acquireInterruptibly","acquire","java.util.concurrent.locks.AbstractQueuedSynchronizer$ExclusiveNode","java.util.concurrent.locks.ReentrantReadWriteLock$ReadLock","lock","acquireShared","java.util.concurrent.locks.ReentrantReadWriteLock$Sync","tryAcquireShared","java.lang.ThreadLocal$ThreadLocalMap","set","java.lang.ThreadLocal$ThreadLocalMap$Entry","java.util.concurrent.locks.ReentrantReadWriteLock$Sync$ThreadLocalHoldCounter","java.util.concurrent.locks.ReentrantReadWriteLock$Sync$HoldCounter","short[]","signalNotEmpty","fullTryAcquireShared","handleSocketClosed","scheduleClose","close","implCloseChannel","clone","java.nio.channels.SelectionKey[]",];
+
+    let currentHeatmap = executionsHeatmap;
+    let currentHeatmapType = 'executions';
+
+    let heatHeight = 60;
+
+    let heatLastSample = -1;
+    let heatActiveSample1 = -1;
+    let heatActiveSample2 = -1;
+    let heatDiffStart = -1;
+    let heatDiffEnd = -1;
+    let highlightStart = -1;
+    let highlightEnd = -1;
+
+    const titleText = document.getElementById("title").textContent;
+    document.getElementById("title").style.display = 'none';
+    document.title = titleText;
+
+    const heatCanvas = document.getElementById('heatmap-canvas');
+    const heatStatus = document.getElementById('status');
+    const heatCanvasWrapper = document.getElementById('heatmap-canvas-wrapper');
+    const heatCanvasContainer = document.getElementById('heatmap-canvas-container');
+
+    let heatC;
+    let prevDx = -1000000000;
+
+    let searchExecutedCount = 0;
+    let searchMax = 0;
+
+    const timeOptions = {
+        year: '2-digit',
+        month: '2-digit',
+        day: '2-digit',
+        timeZoneName: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        fractionalSecondDigits: 2
+    };
+
+    const timeOptionsShort = {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        fractionalSecondDigits: 2
+    };
+
+    const timeOptionsTiny = {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+        //hour12: false
+    };
+
+    function methodInfo(methodIndex, out) {
+        if (methodIndex === -1) {
+            out.className = '';
+            out.methodName = 'all';
+            out.location = 0;
+            out.type = 3;
+            return;
+        }
+
+        methodIndex--;
+
+        let methodAndClass = methods.int36(methodIndex * 12);
+        let locationAndType = methods.int36(methodIndex * 12 + 6)
+        let className = (methodAndClass & 0x3FFFF) - 1;
+        let methodName = (methodAndClass >>> 18) - 1;
+
+        out.className = cpool[className];
+        out.methodName = cpool[methodName];
+        out.location = locationAndType >>> 4;
+        out.type = locationAndType & 15;
+    }
+
+    function title(methodIndex, out) {
+        methodInfo(methodIndex, out);
+        const codeLine = (out.location & 0xffff);
+        let locationSuffix = codeLine === 0 ? "" : (":" + codeLine);
+
+        if (out.methodName === '') {
+            return out.className + locationSuffix;
+        }
+        if (out.className === '') {
+            return out.methodName + locationSuffix;
+        }
+        if (out.type >= 3 && out.type <= 5) {
+            return out.methodName + locationSuffix;
+        }
+
+        return out.className + "." + out.methodName + locationSuffix;
+    }
+
+    let bgInterval = null;
+    let bgTasks = [];
+    let cooldownTime = 0;
+    let nextTask = 0;
+
+    function addTask(id, iteration, afterFrame) {
+        for (let t of bgTasks) {
+            if (t.id === id) {
+                t.f = iteration;
+                t.a = afterFrame;
+                return;
+            }
+        }
+
+        bgTasks.push({id: id, f: iteration, a: afterFrame});
+        if (bgTasks.length === 1) {
+            bgInterval = setInterval(function() {
+                let start = performance.now();
+                if (start <= cooldownTime) {
+                    return;
+                }
+                let overflow = false;
+                do {
+                    let task = bgTasks[nextTask];
+                    if (task.f()) {
+                        nextTask++;
+                    } else {
+                        bgTasks.splice(nextTask, 1);
+                        if (bgTasks.length === 0) {
+                            clearInterval(bgInterval);
+                            nextTask = 0;
+                            return;
+                        }
+                    }
+
+                    if (nextTask >= bgTasks.length) {
+                        nextTask = 0;
+                        overflow = true;
+                    }
+                } while(performance.now() - start < 8);
+
+                for (let q = 0; q < overflow ? bgTasks.length : nextTask; q++) {
+                    bgTasks[q].a();
+                }
+            })
+        }
+    }
+
+    function prepareFrames(from, to) {
+        let mul = zoomToGroupSize[currentHeatmap.zoom];
+        from *= mul;
+        to = (to + 1) * mul - 1;
+        if (to >= currentHeatmap.blocks.length) {
+            to = currentHeatmap.blocks.length - 1;
+        }
+
+        const frames = new Queue();
+        const root = new Map();
+        root.c = 0;
+        root.m = -1;
+        root.x = 0;
+        const roots = [root];
+        let levelsCount = 1;
+
+        for (let pos = from; pos <= to; pos++) {
+            const block = currentHeatmap.blocks[pos];
+
+            root.c += block.length;
+
+            for (let stack of block) {
+                levelsCount = Math.max(stack.length + 1, levelsCount);
+
+                frames.push(root);
+                frames.push(stack);
+            }
+        }
+
+        return [frames, roots, levelsCount]
+    }
+
+    function nextFrames(frames, level) {
+        frames.push(null);  // end stacks marker
+
+        let nowFrame = null;
+
+        while (true) {
+            const frame = frames.shift();
+            if (frame === null) {   // end stack marker
+                break;
+            }
+
+            const stack = frames.shift();
+            if (level >= stack.length) {
+                continue;
+            }
+
+            const methodId = stack[level];
+            nowFrame = frame.get(methodId);
+            if (nowFrame === undefined) {
+                nowFrame = new Map();
+                nowFrame.m = methodId;
+                nowFrame.c = 0;
+                frame.set(methodId, nowFrame);
+            }
+            nowFrame.c++;
+
+            frames.push(nowFrame);
+            frames.push(stack);
+        }
+    }
+
+    function renderTraces(from, to) {
+        let [frames, roots, levelsCount] = prepareFrames(from, to);
+        levels.length = 0;
+        for (let i = 0; i < levelsCount; i++) {
+            levels.push([]);
+        }
+
+        let currentLevel = 0;
+        let levelToRedraw = 0;
+        let methodInfoOut = {};
+
+        addTask('flame', function () {
+                nextFrames(frames, currentLevel);
+
+                let level = levels[currentLevel];
+                let nextRoots = [];
+                for (let root of roots) {
+                    let x = root.x;
+                    const t = title(root.m, methodInfoOut);
+                    let color = getColor(palette[methodInfoOut.type]);
+                    level.push({left: x, width: root.c, color: color, title: t});
+
+                    let nextFrames = [...root.values()];
+
+                    nextFrames.sort((k1, k2) => k2.c - k1.c);
+                    for (let frame of nextFrames) {
+                        frame.x = x;
+                        x += frame.c;
+                        nextRoots.push(frame);
+                    }
+                }
+                level.sort((k1, k2) => k1.left - k2.left);
+
+                roots = nextRoots;
+                currentLevel++;
+                if (currentLevel < levelsCount) {
+                    return true;
+                }
+                renderWithMatch(levelsCount * 16, levels[0][0], 0);
+                return false;
+            },
+            function () {
+                renderWithMatch(4096, levels[0][0], 0, levelToRedraw);
+                levelToRedraw = currentLevel;
+            });
+    }
+
+    function renderWithMatch(newCanvasHeight, root, level, minLevel) {
+        newCanvasHeight = Math.min(32767, newCanvasHeight);
+        if (canvasHeight !== newCanvasHeight) {
+            canvasHeight = newCanvasHeight;
+            canvas.style.height = canvasHeight + 'px';
+            canvas.height = canvasHeight * (devicePixelRatio || 1);
+            c = canvas.getContext('2d');
+            if (devicePixelRatio) c.scale(devicePixelRatio, devicePixelRatio);
+            c.font = document.body.style.font;
+        }
+        const matched = render(root, level, minLevel);
+        if (pattern === undefined) {
+            document.getElementById('match').style.display = 'none';
+            document.getElementById('produced').style.display = 'inherit';
+        } else {
+            document.getElementById('matchval').textContent = pct(matched, root.width) + '%';
+            document.getElementById('match').style.display = 'inline-block';
+            document.getElementById('produced').style.display = 'none';
+        }
+    }
+
+    function renderDiff(from, to, baseFrom, baseTo) {
+        let [frames, roots, levelsCount] = prepareFrames(from, to);
+        let [baseFrames, baseRoots, ] = prepareFrames(baseFrom, baseTo);
+        roots[0].b = baseRoots[0];
+
+        levels.length = 0;
+        for (let i = 0; i < levelsCount; i++) {
+            levels.push([]);
+        }
+        let currentLevel = 0;
+        let levelToRedraw = 0;
+        let methodInfoOut = {};
+
+        let minDiff = 0;
+        let maxDiff = 0;
+
+        addTask('flame', function () {
+                nextFrames(frames, currentLevel);
+                nextFrames(baseFrames, currentLevel);
+                let level = levels[currentLevel];
+
+                for (let root of roots) {
+                    let wasCount = root.b === undefined ? 0 : root.b.c;
+                    if (wasCount !== 0) {
+                        maxDiff = Math.max(maxDiff, root.c - wasCount);
+                        minDiff = Math.min(minDiff, root.c - wasCount)
+                    }
+                }
+
+                let nextRoots = [];
+                for (let root of roots) {
+                    let x = root.x;
+
+                    let wasCount = root.b === undefined ? 0 : root.b.c;
+                    const t = title(root.m, methodInfoOut) + " (" + root.c + "/" + wasCount +")";
+                    let color;
+                    if (wasCount === 0) {
+                        color = "#dac571";
+                    } else if (wasCount >= root.c) {
+                        const ratio = (root.c - wasCount) / minDiff;
+                        color = 'rgb(' + (245 - 90 * ratio) + ',' + (250 - 90 * ratio) + ',' + 255 +')';
+                    } else {
+                        const ratio = (root.c - wasCount) / maxDiff;
+                        color = 'rgb(' + 255 + ',' + (245 - 180 * ratio) + ',' + (240 - 200 * ratio) +')';
+                    }
+                    level.push({left: x, width: root.c, color: color, title: t});
+
+                    let nextFrames = [];
+                    for (let [methodId, frame] of root) {
+                        frame.b = root.b && root.b.get(methodId);
+                        nextFrames.push(frame);
+                    }
+                    nextFrames.sort((k1, k2) => k2.c - k1.c);
+                    for (let frame of nextFrames) {
+                        frame.x = x;
+                        x += frame.c;
+                        nextRoots.push(frame);
+                    }
+                }
+                level.sort((k1, k2) => k1.left - k2.left);
+
+                roots = nextRoots;
+                currentLevel++;
+                if (currentLevel < levelsCount) {
+                    return true;
+                }
+                renderWithMatch(levelsCount * 16, levels[0][0], 0);
+                return false;
+            },
+            function () {
+                renderWithMatch(4096, levels[0][0], 0, levelToRedraw);
+                levelToRedraw = currentLevel;
+            });
+    }
+
+    function redrawHeatSamplesImpl(from, to, dx) {
+        const patternDraw = !!pattern;
+        const startBlock = currentHeatmap.startBlock();
+
+        const max = currentHeatmap.max();
+        const heatmap = currentHeatmap.heatmap();
+
+        for (let index = from; index <= to; index++) {
+            let color;
+            let i = index - startBlock;
+            if (i < 0 || i >= heatmap.length) {
+                color = '#ddd';
+            } else {
+                let count = heatmap[i];
+
+                let useFound = patternDraw && searchExecutedCount > i;
+                let maxValue = useFound ? searchMax : max;
+                let value = useFound ? found[i] : count;
+                let ratio = value / (maxValue || 1);
+
+                if (useFound) {
+                    if (ratio < 0.8) {
+                        let value = Math.round(255 - ratio * 255 / 0.8);
+                        color = 'rgb(' + value + ',' + value + ',255)';
+                    } else {
+                        let value = Math.round(255 - (ratio - 0.8) * 100 / 0.2);
+                        color = 'rgb(0,0,' + value + ')';
+                    }
+                } else {
+                    if (ratio < 0.8) {
+                        let value = Math.round(255 - ratio * 255 / 0.8);
+                        color = 'rgb(255,' + value + ',' + value + ')';
+                    } else {
+                        let value = Math.round(255 - (ratio - 0.8) * 100 / 0.2);
+                        color = 'rgb('+ value + ',0,0)';
+                    }
+                }
+
+            }
+            heatC.fillStyle = color;
+
+            let x = Math.floor(index / heatHeight);
+            let y = index % heatHeight;
+            heatC.fillRect(x * sq - dx, y * sq + canvasTimeHeight, sq, sq);
+        }
+
+        let blocksBetweenMarks = 20;
+
+        let fromBlock = Math.floor(from / blocksBetweenMarks / heatHeight) - 1;
+        let toBlock = Math.ceil(to / blocksBetweenMarks / heatHeight);
+
+        let markPixels = blocksBetweenMarks * sq;
+
+        heatC.fillStyle = '#fff';
+        heatC.fillRect(
+            fromBlock * markPixels - dx,
+            0,
+            (toBlock - fromBlock + 1) * markPixels,
+            canvasTimeHeight
+        );
+
+        heatC.beginPath();
+        heatC.moveTo(fromBlock * markPixels - dx + 0.5, canvasTimeHeight + 0.5);
+        heatC.lineTo(toBlock * markPixels - dx + 0.5, canvasTimeHeight + 0.5);
+        heatC.stroke();
+
+        heatC.fillStyle = '#000';
+
+        let groupSize = heatHeight;
+        let oneBlockMs = currentHeatmap.currentTimeBlock();
+        let oneGroupMs = oneBlockMs * groupSize;
+        let oneMarkMs = oneGroupMs * blocksBetweenMarks;
+        for (let markIndex = fromBlock; markIndex <= toBlock; markIndex++) {
+            let origin = Math.floor(startMs / oneMarkMs) * oneMarkMs;
+            let ms = origin + markIndex * oneMarkMs;
+            let markOffset = markIndex * markPixels - dx;
+
+            let title = new Date(ms).toLocaleTimeString(undefined, timeOptionsTiny);
+
+            let w = heatC.measureText(title).width;
+            let x = markOffset + (markPixels - w) / 2;
+            heatC.fillText(title, x, canvasTimeHeight - 1, markPixels);
+
+            heatC.beginPath();
+            heatC.moveTo(markOffset + 0.5, canvasTimeHeight - 2 * sqScale + 0.5);
+            heatC.lineTo(markOffset + 0.5, canvasTimeHeight + 2 * sqScale + 0.5);
+            heatC.stroke();
+        }
+    }
+
+    function redrawHeatSamples(from, to) {
+        let dx = Math.floor((heatCanvasContainer.scrollLeft - canvasScrollPadding) * sqScale);
+
+        from = Math.max(from, heatHeight * Math.floor(dx / sq));
+        to = Math.min(to, heatHeight * Math.ceil((dx + heatCanvas.width) / sq));
+        redrawHeatSamplesImpl(from, to, dx);
+    }
+
+    function redrawHeatMap() {
+        redrawHeatSamples(0, (1 + currentHeatmap.count() / heatHeight | 0) * heatHeight);
+    }
+
+    function fillCanvasWithEvents(zoom) {
+        searchExecutedCount = 0;
+        searchMax = 0;
+
+        addTask('search', function () {
+            return false;
+        }, function (){});
+
+        currentHeatmap.setZoom(zoom);
+        heatHeight = zoomToHeight[zoom];
+
+        const m = devicePixelRatio || 1;
+        sqScale = m;
+        sqPx = 5;
+        sq = Math.floor(sqPx * m);
+        sqPx = sq / m;
+        canvasTimeHeight = sq * 2 + 2;
+        canvasTimeHeightPx = canvasTimeHeight / m;
+
+        const widthPx = canvasScrollPadding + heatCanvasContainer.offsetWidth + canvasScrollPadding;
+        const heightPx = sqPx * heatHeight + canvasTimeHeightPx;
+
+        const heatWidthPx = Math.max(20, Math.ceil(currentHeatmap.count() / heatHeight)) * sqPx;
+        heatCanvasWrapper.style.width = heatWidthPx + 'px';
+        if (heatCanvasContainer.offsetWidth > heatWidthPx) {
+            heatCanvasContainer.style.overflowX = 'hidden';
+        } else {
+            heatCanvasContainer.style.overflowX = 'scroll';
+        }
+
+        heatCanvas.width = Math.ceil(widthPx * m);
+        heatCanvas.height = Math.ceil(heightPx * m);
+        heatCanvas.style.width = widthPx + 'px';
+        heatCanvas.style.height = heightPx + 'px';
+
+        heatC = heatCanvas.getContext('2d');
+        heatC.font = sq * 2 + 'px Verdana, sans-serif';
+        heatC.lineWidth = 1;
+        heatC.strokeStyle = '#000';
+
+        document.getElementById('heatmap-height-line').textContent = [' 1 sec : 20 ms ',' 1 min : 1 sec ',' 5 min : 5 sec ',' 1 hr  : 1 min '][currentHeatmap.zoom];
+        redrawHeatMap();
+    }
+
+    let found = new Uint32Array(0);
+
+    function searchIterative(r) {
+        if (r && (r = prompt('Enter regexp to search:', '')) === null) {
+            return;
+        }
+        searchExecutedCount = 0;
+        searchMax = 0;
+        if (!r) {
+            pattern = undefined;
+            redrawHeatMap();
+            addTask('search', function () {
+                return false;
+            }, function (){});
+            return;
+        }
+        let renderFrom = 0;
+        let heatmap = currentHeatmap.heatmap();
+        let count = heatmap.length;
+        found = new Uint32Array(count);
+        let start = currentHeatmap.startBlock();
+        function renderFunc() {
+            redrawHeatSamples(start + renderFrom, start + searchExecutedCount - 1);
+            renderFrom = searchExecutedCount;
+        }
+        pattern = r ? RegExp(r) : undefined;
+        const matchedMethods = new Set();
+        const methodOut = {};
+        for (let index = methods.data.length / 12; index >= 0; index--) {
+            if (pattern.test(title(index, methodOut))) {
+                matchedMethods.add(index);
+            }
+        }
+
+        let mul = zoomToGroupSize[currentHeatmap.zoom];
+
+        addTask('search', function () {
+            let amount = 0;
+            const from = searchExecutedCount * mul;
+            const to = (searchExecutedCount + 1) * mul;
+            for (let i = from; i < to; i++) {
+                const stacks = currentHeatmap.blocks[i];
+                if (stacks === undefined) {
+                    continue;
+                }
+
+                for (let stack of stacks) {
+                    for (let methodIndex of stack) {
+                        if (matchedMethods.has(methodIndex)) {
+                            amount++;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (searchMax < amount) {
+                renderFrom = 0;
+                searchMax = amount;
+            }
+
+            found[searchExecutedCount] = amount;
+            searchExecutedCount++;
+            if (searchExecutedCount >= count) {
+                renderFunc();
+
+                const matched = render(root, rootLevel);
+                document.getElementById('matchval').textContent = pct(matched, root.width) + '%';
+                document.getElementById('match').style.display = r ? 'inherit' : 'none';
+                document.getElementById('produced').style.display = r ? 'none' : 'inherit';
+
+                return false;
+            }
+            return true;
+        }, renderFunc);
+
+    }
+
+    function renderHeatmap() {
+        let dx = heatCanvasContainer.scrollLeft - canvasScrollPadding;
+        heatCanvas.style.transform = 'translate(' + dx + 'px, 0px)';
+
+        const width = Math.floor(heatCanvasContainer.offsetWidth / sq / (devicePixelRatio || 1));
+
+        let z = 0;
+        for (; z < zoomToGroupSize.length; z++) {
+            if (currentHeatmap.blocks.length / (zoomToGroupSize[z] * zoomToHeight[z]) < width) {
+                break;
+            }
+        }
+
+        fillCanvasWithEvents(Math.min(z, currentHeatmap.maxZoom - 1));
+
+        renderTraces(0, currentHeatmap.heatmap().length - 1);
+    }
+
+    heatCanvasContainer.addEventListener('scroll', function() {
+        let dx = Math.floor((heatCanvasContainer.scrollLeft - canvasScrollPadding) * sqScale);
+        let dxPx = dx / sqScale;
+        heatCanvas.style.transform = 'translate(' + dxPx + 'px, 0px)';
+        let delta = Math.abs(dx - prevDx);
+        if (delta >= heatCanvas.width || searchExecutedCount !== 0) {
+            redrawHeatMap();
+        } else {
+            heatC.drawImage(heatCanvas, prevDx - dx, 0);
+            if (prevDx < dx) {
+                let from = heatHeight * Math.floor((prevDx + heatCanvas.width) / sq);
+                let to = heatHeight * Math.ceil((dx + heatCanvas.width) / sq);
+                redrawHeatSamplesImpl(from, to, dx);
+            } else {
+                let from = heatHeight * Math.floor(dx / sq);
+                let to = heatHeight * Math.ceil(prevDx / sq);
+                redrawHeatSamplesImpl(from, to, dx);
+            }
+        }
+        prevDx = dx;
+        cooldownTime = performance.now() + 500;
+    });
+
+    document.getElementById('heatmap-height-line').onclick = function() {
+        fillCanvasWithEvents((currentHeatmap.maxZoom + currentHeatmap.zoom - 1) % (currentHeatmap.maxZoom));
+        highlightStart = highlightEnd = heatDiffStart = heatDiffEnd = heatActiveSample1 = heatActiveSample2 = -1;
+        for (let suffix of ['Selection', 'Diff', 'Active']) {
+            for (let prefix of ['left', 'leftMiddle', 'middle', 'rightMiddle', 'right']) {
+                document.getElementById(prefix + suffix).style.display = 'none';
+            }
+        }
+    }
+
+    function callHighlightRedraw(start, end, suffix) {
+        let left = document.getElementById('left' + suffix);
+        let leftMiddle = document.getElementById('leftMiddle' + suffix);
+        let middle = document.getElementById('middle' + suffix);
+        let rightMiddle = document.getElementById('rightMiddle' + suffix);
+        let right = document.getElementById('right' + suffix);
+
+        let x1 = Math.floor(start / heatHeight);
+        let y1 = start % heatHeight;
+        let x2 = Math.floor(end / heatHeight);
+        let y2 = end % heatHeight;
+
+        let veryStartX = x1 * sqPx;
+        let veryStartY = y1 * sqPx;
+        let veryEndX = x2 * sqPx;
+        let px = 1 / sqScale;
+        let singleElementWidth = sqPx + px;
+
+        let topPadding = canvasTimeHeightPx;
+
+        if (x1 === x2) {
+            left.style.display = 'none';
+            right.style.display = 'none';
+
+            for (let b of [middle, leftMiddle, rightMiddle]) {
+                b.style.left = veryStartX + 'px';
+                b.style.top = topPadding + veryStartY + 'px';
+                b.style.width = singleElementWidth + 'px';
+                b.style.height = (y2 - y1 + 1) * sqPx + px + 'px';
+                b.style.display = 'block';
+            }
+        } else {
+            left.style.left = veryStartX + 'px';
+            left.style.top = topPadding + veryStartY + 'px';
+            left.style.width = singleElementWidth + 'px';
+            left.style.height = (heatHeight - y1) * sqPx + px + 'px';
+            left.style.display = 'block';
+
+            leftMiddle.style.left = veryStartX + 'px';
+            leftMiddle.style.top = topPadding + 'px';
+            leftMiddle.style.width = singleElementWidth + 'px';
+            leftMiddle.style.height = y1 * sqPx + px + 'px';
+            leftMiddle.style.display = 'block';
+
+            rightMiddle.style.left = veryEndX + 'px';
+            rightMiddle.style.top = topPadding + (y2 + 1) * sqPx + 'px';
+            rightMiddle.style.width = sqPx + px + 'px';
+            rightMiddle.style.height = (heatHeight - y2 - 1) * sqPx + px + 'px';
+            rightMiddle.style.display = 'block';
+
+            right.style.left = veryEndX + 'px';
+            right.style.top = topPadding + 'px';
+            right.style.width = sqPx + px + 'px';
+            right.style.height = (y2 + 1) * sqPx + px + 'px';
+            right.style.display = 'block';
+
+            if (x2 - x1 === 1) {
+                middle.style.display = 'none';
+            } else {
+                middle.style.left = veryStartX + sqPx + px + 'px';
+                middle.style.top = topPadding + 'px';
+                middle.style.width = (x2 - x1 - 1) * sqPx - px + 'px';
+                middle.style.height = heatHeight * sqPx + px + 'px';
+                middle.style.display = 'block';
+            }
+        }
+    }
+
+    function callSelectionRedraw(sample, shiftPressed, ctrlPressed) {
+        if (ctrlPressed) {
+            highlightStart = sample;
+            highlightEnd = sample + Math.abs(heatActiveSample1 - heatActiveSample2);
+        } else if (shiftPressed && heatActiveSample1 !== -1) {
+            highlightStart = Math.min(heatActiveSample1, sample);
+            highlightEnd = Math.max(heatActiveSample1, sample);
+        } else {
+            highlightStart = highlightEnd = sample;
+        }
+
+        callHighlightRedraw(highlightStart, highlightEnd, 'Selection');
+
+        const index = sample - currentHeatmap.startBlock();
+        const heatmap = currentHeatmap.heatmap();
+        if (index >= 0 && index < heatmap.length) {
+            const ms = startMs + currentHeatmap.currentTimeBlock() * index;
+            const total =  heatmap[index];
+            const max = currentHeatmap.max();
+            heatCanvas.title = new Date(ms).toLocaleTimeString(undefined, timeOptionsShort) + " " + index;  // FIXME
+            const totalText = "total: " + total + " (" + Math.floor(total / max * 100) + "%)";
+            const searchText = searchExecutedCount > index
+                ? "; match: " + found[index] + " (" + Math.floor(found[index] / Math.max(total, 1) * 100) + "%)"
+                : "";
+            status.textContent = totalText + searchText;
+            status.style.display = 'inline';
+        } else {
+            status.style.display = 'none';
+        }
+    }
+
+    function callActiveRedraw(sample, shiftPressed, ctrlPressed) {
+        if (ctrlPressed) {
+            let minSelected = Math.min(heatActiveSample1, heatActiveSample2);
+            let maxSelected = Math.max(heatActiveSample1, heatActiveSample2);
+
+            heatDiffStart = highlightStart;
+            heatDiffEnd = highlightEnd;
+
+            callHighlightRedraw(highlightStart, highlightEnd, 'Diff');
+            renderDiff(
+                minSelected - currentHeatmap.startBlock(),
+                maxSelected - currentHeatmap.startBlock(),
+                heatDiffStart - currentHeatmap.startBlock(),
+                heatDiffEnd - currentHeatmap.startBlock()
+            );
+        } else {
+            heatDiffStart = -1;
+            heatDiffEnd = -1;
+            if (shiftPressed && heatActiveSample1 !== -1) {
+                heatActiveSample2 = sample;
+            } else {
+                heatActiveSample1 = heatActiveSample2 = sample;
+            }
+
+            let minSelected = Math.min(heatActiveSample1, heatActiveSample2);
+            let maxSelected = Math.max(heatActiveSample1, heatActiveSample2);
+
+            callHighlightRedraw(highlightStart, highlightEnd, 'Diff');
+            callHighlightRedraw(minSelected, maxSelected, 'Active');
+            renderTraces(
+                Math.max(0, minSelected - currentHeatmap.startBlock()),
+                Math.min(currentHeatmap.heatmap().length - 1, maxSelected - currentHeatmap.startBlock())
+            );
+        }
+    }
+
+    window.addEventListener('keydown', function (e) {
+        if (e.key === 'Shift') {
+            callSelectionRedraw(heatLastSample, true, e.ctrlKey);
+        } else if (e.key === 'Control') {
+            callSelectionRedraw(heatLastSample, e.shiftKey, true);
+        }
+    });
+
+    window.addEventListener('keyup', function (e) {
+        if (e.key === 'Shift') {
+            callSelectionRedraw(heatLastSample, false, e.ctrlKey);
+        } else if (e.key === 'Control') {
+            callSelectionRedraw(heatLastSample, e.shiftKey, false);
+        }
+    });
+
+    heatCanvas.onmousemove = function (event) {
+        let x = Math.floor((event.offsetX + heatCanvasContainer.scrollLeft - canvasScrollPadding) / sqPx);
+        let y = Math.floor(Math.max(0, event.offsetY - canvasTimeHeightPx) / sqPx);
+        if (y >= heatHeight) {
+            y = heatHeight - 1;
+        }
+        heatLastSample = x * heatHeight + y;
+        if ((event.buttons & 1) === 1) {
+            callSelectionRedraw(heatLastSample, true, event.ctrlKey);
+        } else {
+            callSelectionRedraw(heatLastSample, event.shiftKey, event.ctrlKey);
+        }
+    }
+
+    heatCanvas.onmouseout = function () {
+        status.style.display = 'none';
+    };
+
+    heatCanvas.onmousedown = function (event) {
+        let x = Math.floor((event.offsetX + heatCanvasContainer.scrollLeft - canvasScrollPadding) / sqPx);
+        let y = Math.floor(Math.max(0, event.offsetY - canvasTimeHeightPx) / sqPx);
+        let sample = x * heatHeight + y;
+
+        callActiveRedraw(sample, event.shiftKey, event.ctrlKey);
+    };
+
+    heatCanvas.onmouseup = function (event) {
+        let x = Math.floor((event.offsetX + heatCanvasContainer.scrollLeft - canvasScrollPadding) / sqPx);
+        let y = Math.floor(Math.max(0, event.offsetY - canvasTimeHeightPx) / sqPx);
+        let sample = x * heatHeight + y;
+
+        callActiveRedraw(sample, true, event.ctrlKey);
+    };
+
+
+
+init();
+// FIXME search(/*highlight:*/);
+</script></body></html>

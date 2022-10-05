@@ -10,14 +10,11 @@ import ok.dht.test.saskov.database.Dao;
 import ok.dht.test.saskov.database.Entry;
 import ok.dht.test.saskov.database.drozdov.MemorySegmentDao;
 import one.nio.http.HttpServer;
-import one.nio.http.HttpServerConfig;
-import one.nio.http.HttpSession;
 import one.nio.http.Param;
 import one.nio.http.Path;
 import one.nio.http.Request;
 import one.nio.http.RequestMethod;
 import one.nio.http.Response;
-import one.nio.server.AcceptorConfig;
 import one.nio.util.Utf8;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,13 +38,7 @@ public class MyService implements Service {
         dao = new MemorySegmentDao(
                 new Config(config.workingDir(), FLUSH_THRESHOLD)
         );
-        server = new HttpServer(createConfigFromPort(config.selfPort())) {
-            @Override
-            public void handleDefault(Request request, HttpSession session) throws IOException {
-                Response response = new Response(Response.BAD_REQUEST, Response.EMPTY);
-                session.sendResponse(response);
-            }
-        };
+        server = new HttpServerWithExecutors(config.selfPort());
         server.addRequestHandlers(this);
         server.start();
 
@@ -122,15 +113,6 @@ public class MyService implements Service {
                 Response.ACCEPTED,
                 Response.EMPTY
         );
-    }
-
-    private static HttpServerConfig createConfigFromPort(int port) {
-        HttpServerConfig httpConfig = new HttpServerConfig();
-        AcceptorConfig acceptor = new AcceptorConfig();
-        acceptor.port = port;
-        acceptor.reusePort = true;
-        httpConfig.acceptors = new AcceptorConfig[]{acceptor};
-        return httpConfig;
     }
 
     @ServiceFactory(stage = 1, week = 1)
