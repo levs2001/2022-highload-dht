@@ -55,8 +55,8 @@ public class HttpServerWithExecutors extends HttpServer {
 
     @Override
     public void handleDefault(Request request, HttpSession session) throws IOException {
-        String resp = request.getMethod() == Request.METHOD_POST ?
-                Response.METHOD_NOT_ALLOWED : Response.BAD_REQUEST;
+        String resp = request.getMethod() == Request.METHOD_POST
+                ? Response.METHOD_NOT_ALLOWED : Response.BAD_REQUEST;
         Response response = new Response(resp, Response.EMPTY);
         session.sendResponse(response);
     }
